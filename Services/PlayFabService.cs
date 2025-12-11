@@ -55,7 +55,7 @@ namespace CardClickerRPG.Services
                 {
                     new StatisticUpdate
                     {
-                        StatisticName = "DeckPower",  // 이 이름이 PlayFab에서 만든 리더보드 이름과 정확히 일치해야 함
+                        StatisticName = "DeckPower",
                         Value = deckPower
                     }
                 }
@@ -64,19 +64,10 @@ namespace CardClickerRPG.Services
             try
             {
                 var result = await PlayFabClientAPI.UpdatePlayerStatisticsAsync(request);
-                
-                if (result.Error != null)
-                {
-                    Console.WriteLine($"리더보드 업데이트 실패: {result.Error.ErrorMessage}");
-                    return false;
-                }
-                
-                Console.WriteLine($"리더보드 업데이트 성공: {deckPower}");
-                return true;
+                return result.Error == null;
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"리더보드 업데이트 예외: {ex.Message}");
                 return false;
             }
         }
