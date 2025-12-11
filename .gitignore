@@ -399,3 +399,13 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# AWS Credentials (보안)
+.aws/
+*.csv
+credentials
+config
+
+# App Settings (비밀키 포함)
+appsettings.json
+appsettings.*.json
