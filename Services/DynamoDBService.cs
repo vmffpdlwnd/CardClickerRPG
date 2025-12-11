@@ -4,7 +4,6 @@ using Amazon.DynamoDBv2.Model;
 using Amazon.DynamoDBv2.DocumentModel;
 using CardClickerRPG.Config;
 using CardClickerRPG.Models;
-using Newtonsoft.Json;
 
 namespace CardClickerRPG.Services
 {
@@ -287,7 +286,8 @@ namespace CardClickerRPG.Services
                     Rarity = item["rarity"].S,
                     HP = int.Parse(item["hp"].N),
                     ATK = int.Parse(item["atk"].N),
-                    DEF = int.Parse(item["def"].N)
+                    DEF = int.Parse(item["def"].N),
+                    Ability = item.ContainsKey("ability") ? item["ability"].S : "NONE"
                 };
             }
             catch (Exception ex)
@@ -297,13 +297,13 @@ namespace CardClickerRPG.Services
             }
         }
 
-        // 랜덤 카드 ID 가져오기 (간단 버전 - 나중에 개선)
+        // 랜덤 카드 ID 가져오기
         public async Task<string> GetRandomCardIdAsync()
         {
-            // TODO: 실제로는 Scan으로 전체 조회 후 랜덤 선택
-            // 지금은 임시로 card_0001 ~ card_10000 범위에서 랜덤
+            // 실제 CardMaster 테이블에서 총 카드 수 조회 후 랜덤 선택
+            // 지금은 간단하게 하드코딩
             var random = new Random();
-            var randomId = random.Next(1, 10001);
+            var randomId = random.Next(1, AppConfig.TotalCardCount + 1); // Config에서 관리
             return $"card_{randomId:D4}";
         }
 

@@ -117,6 +117,7 @@ namespace CardClickerRPG
                 Console.WriteLine($"[{newCard.MasterData.Rarity}] {newCard.MasterData.Name}");
                 Console.WriteLine($"HP:{newCard.MasterData.HP} ATK:{newCard.MasterData.ATK} DEF:{newCard.MasterData.DEF}");
                 Console.WriteLine($"전투력: {newCard.GetPower()}");
+                Console.WriteLine($"능력: {newCard.MasterData.GetAbilityDescription()}");
             }
             else
             {
@@ -144,6 +145,7 @@ namespace CardClickerRPG
 
                 Console.WriteLine($"{i + 1}. [{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level}");
                 Console.WriteLine($"   HP:{card.MasterData.HP} ATK:{card.MasterData.ATK} DEF:{card.MasterData.DEF} | 전투력: {card.GetPower()}");
+                Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
             }
         }
 
@@ -167,6 +169,7 @@ namespace CardClickerRPG
                 if (card.MasterData == null) continue;
 
                 Console.WriteLine($"{i + 1}. [{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level} - 전투력 {card.GetPower()}");
+                Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
             }
         }
 
