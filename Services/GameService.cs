@@ -39,15 +39,32 @@ namespace CardClickerRPG.Services
             
             // 카드 데이터 로드
             _playerCards = await _dynamoDBService.GetPlayerCardsAsync(userId);
-            Console.WriteLine($"[DEBUG] 로드된 카드 수: {_playerCards.Count}");
             
-            // CardMaster 정보 로드
-            foreach (var card in _playerCards)
+            // CardMaster 정보 로드 및 유효하지 않은 카드 제거
+            var invalidCards = new List<PlayerCard>();
+            for (int i = 0; i < _playerCards.Count; i++)
             {
+                var card = _playerCards[i];
                 card.MasterData = await _dynamoDBService.GetCardMasterAsync(card.CardId);
-                Console.WriteLine($"[DEBUG] 카드 로드: {card.CardId} - {card.MasterData?.Name}");
+                
+                if (card.MasterData == null)
+                {
+                    invalidCards.Add(card);
+                }
             }
             
+            // 유효하지 않은 카드 삭제
+            foreach (var card in invalidCards)
+            {
+                await _dynamoDBService.DeleteCardAsync(userId, card.InstanceId);
+                _playerCards.Remove(card);
+            }
+            
+            if (invalidCards.Count > 0)
+            {
+                Console.WriteLine($"[INFO] 유효하지 않은 카드 {invalidCards.Count}개 제거됨");
+            }
+                  
             return true;
         }
 
