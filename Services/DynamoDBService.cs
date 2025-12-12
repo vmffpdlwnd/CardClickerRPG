@@ -4,8 +4,6 @@ using Amazon.DynamoDBv2.Model;
 using Amazon.DynamoDBv2.DocumentModel;
 using CardClickerRPG.Config;
 using CardClickerRPG.Models;
-using Newtonsoft.Json;
-using Microsoft.Extensions.Configuration;
 
 namespace CardClickerRPG.Services
 {
@@ -15,31 +13,14 @@ namespace CardClickerRPG.Services
 
         public DynamoDBService()
         {
-            // appsettings.json 읽기
-            var configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: true)
-                .Build();
-
-            var accessKey = configuration["AWS:AccessKeyId"];
-            var secretKey = configuration["AWS:SecretAccessKey"];
-            var regionName = configuration["AWS:Region"] ?? AppConfig.AWSRegion;
-
-            var region = RegionEndpoint.GetBySystemName(regionName);
-
-            // appsettings에 키가 있으면 사용, 없으면 credentials 파일 사용
-            if (!string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
-            {
-                _client = new AmazonDynamoDBClient(accessKey, secretKey, region);
-            }
-            else
-            {
-                _client = new AmazonDynamoDBClient(region);
-            }
+            // ~/.aws/credentials 파일에서 자동으로 인증 정보 로드
+            var region = RegionEndpoint.GetBySystemName(AppConfig.AWSRegion);
+            _client = new AmazonDynamoDBClient(region);
         }
 
         #region Player CRUD
 
+        // 플레이어 생성
         public async Task<bool> CreatePlayerAsync(Player player)
         {
             var item = new Dictionary<string, AttributeValue>
@@ -70,6 +51,7 @@ namespace CardClickerRPG.Services
             }
         }
 
+        // 플레이어 조회
         public async Task<Player> GetPlayerAsync(string userId)
         {
             var request = new GetItemRequest
@@ -106,6 +88,7 @@ namespace CardClickerRPG.Services
             }
         }
 
+        // 플레이어 업데이트
         public async Task<bool> UpdatePlayerAsync(Player player)
         {
             player.LastSaveTime = DateTime.UtcNow.ToString("o");
@@ -144,6 +127,7 @@ namespace CardClickerRPG.Services
 
         #region PlayerCard CRUD
 
+        // 카드 추가
         public async Task<bool> AddPlayerCardAsync(PlayerCard card)
         {
             var item = new Dictionary<string, AttributeValue>
@@ -173,6 +157,7 @@ namespace CardClickerRPG.Services
             }
         }
 
+        // 플레이어의 모든 카드 조회
         public async Task<List<PlayerCard>> GetPlayerCardsAsync(string userId)
         {
             var request = new QueryRequest
@@ -211,6 +196,7 @@ namespace CardClickerRPG.Services
             }
         }
 
+        // 카드 레벨업
         public async Task<bool> UpgradeCardAsync(string userId, string instanceId, int newLevel)
         {
             var request = new UpdateItemRequest
@@ -244,6 +230,7 @@ namespace CardClickerRPG.Services
             }
         }
 
+        // 카드 삭제 (분해)
         public async Task<bool> DeleteCardAsync(string userId, string instanceId)
         {
             var request = new DeleteItemRequest
@@ -272,6 +259,7 @@ namespace CardClickerRPG.Services
 
         #region CardMaster
 
+        // 카드 마스터 조회
         public async Task<CardMaster> GetCardMasterAsync(string cardId)
         {
             var request = new GetItemRequest
@@ -309,10 +297,13 @@ namespace CardClickerRPG.Services
             }
         }
 
+        // 랜덤 카드 ID 가져오기
         public async Task<string> GetRandomCardIdAsync()
         {
+            // 실제 CardMaster 테이블에서 총 카드 수 조회 후 랜덤 선택
+            // 지금은 간단하게 하드코딩
             var random = new Random();
-            var randomId = random.Next(1, AppConfig.TotalCardCount + 1);
+            var randomId = random.Next(1, AppConfig.TotalCardCount + 1); // Config에서 관리
             return $"card_{randomId:D4}";
         }
 
