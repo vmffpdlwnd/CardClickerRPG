@@ -39,11 +39,13 @@ namespace CardClickerRPG.Services
             
             // 카드 데이터 로드
             _playerCards = await _dynamoDBService.GetPlayerCardsAsync(userId);
+            Console.WriteLine($"[DEBUG] 로드된 카드 수: {_playerCards.Count}");
             
             // CardMaster 정보 로드
             foreach (var card in _playerCards)
             {
                 card.MasterData = await _dynamoDBService.GetCardMasterAsync(card.CardId);
+                Console.WriteLine($"[DEBUG] 카드 로드: {card.CardId} - {card.MasterData?.Name}");
             }
             
             return true;
