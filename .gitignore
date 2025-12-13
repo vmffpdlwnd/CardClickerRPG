@@ -406,6 +406,6 @@ FodyWeavers.xsd
 credentials
 config
 
-# App Settings (비밀키 포함)
-appsettings.json
+# App Settings - 환경별 설정 파일만 제외 (실제 비밀키 포함)
+appsettings.Development.json
 appsettings.*.json
