@@ -345,12 +345,19 @@ namespace CardClickerRPG.Services
                 .ToList();
         }
 
-        // NEW 플래그 제거
-        public void ClearNewFlags()
+        // NEW 플래그 제거 + DB 반영
+        public async Task ClearNewFlagsAsync()
         {
-            foreach (var card in _playerCards)
+            var tasks = new List<Task>();
+            foreach (var card in _playerCards.Where(c => c.IsNew))
             {
                 card.IsNew = false;
+                tasks.Add(_dynamoDBService.UpdateCardIsNewAsync(card.UserId, card.InstanceId, false));
+            }
+
+            if (tasks.Count > 0)
+            {
+                await Task.WhenAll(tasks);
             }
         }
 

@@ -50,7 +50,7 @@ namespace CardClickerRPG
                         await HandleClick(gameService);
                         break;
                     case "2":
-                        ShowMyCards(gameService);
+                        await ShowMyCards(gameService);
                         break;
                     case "3":
                         await HandleDeckManagement(gameService);
@@ -126,7 +126,7 @@ namespace CardClickerRPG
             }
         }
 
-        static void ShowMyCards(GameService game)
+        static async Task ShowMyCards(GameService game)
         {
             var cards = game.GetCardsSortedByPower();
             var deck = game.GetDeck();
@@ -173,8 +173,8 @@ namespace CardClickerRPG
                 Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
             }
             
-            // 카드를 확인한 후 NEW 플래그 제거
-            game.ClearNewFlags();
+            // 카드를 확인한 후 NEW 플래그 제거 (DB 반영)
+            await game.ClearNewFlagsAsync();
         }
 
         static async Task HandleDeckManagement(GameService game)
@@ -356,7 +356,7 @@ namespace CardClickerRPG
 
         static async Task HandleUpgrade(GameService game)
         {
-            ShowMyCards(game);
+            await ShowMyCards(game);
             
             if (game.PlayerCards.Count == 0)
                 return;

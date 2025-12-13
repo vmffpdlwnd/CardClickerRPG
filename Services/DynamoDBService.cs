@@ -157,7 +157,8 @@ namespace CardClickerRPG.Services
                 ["instanceId"] = new AttributeValue { S = card.InstanceId },
                 ["cardId"] = new AttributeValue { S = card.CardId },
                 ["level"] = new AttributeValue { N = card.Level.ToString() },
-                ["acquiredAt"] = new AttributeValue { S = card.AcquiredAt }
+                ["acquiredAt"] = new AttributeValue { S = card.AcquiredAt },
+                ["isNew"] = new AttributeValue { BOOL = card.IsNew }
             };
 
             var request = new PutItemRequest
@@ -197,13 +198,15 @@ namespace CardClickerRPG.Services
 
                 foreach (var item in response.Items)
                 {
+                    // DB에서 불러온 카드는 이미 본 것으로 간주해 NEW 플래그를 false로 초기화
                     cards.Add(new PlayerCard
                     {
                         UserId = item["userId"].S,
                         InstanceId = item["instanceId"].S,
                         CardId = item["cardId"].S,
                         Level = int.Parse(item["level"].N),
-                        AcquiredAt = item["acquiredAt"].S
+                        AcquiredAt = item["acquiredAt"].S,
+                        IsNew = item.ContainsKey("isNew") ? (item["isNew"].BOOL ?? false) : false
                     });
                 }
 
@@ -245,6 +248,35 @@ namespace CardClickerRPG.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"카드 강화 실패: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateCardIsNewAsync(string userId, string instanceId, bool isNew)
+        {
+            var request = new UpdateItemRequest
+            {
+                TableName = AppConfig.PlayerCardsTableName,
+                Key = new Dictionary<string, AttributeValue>
+                {
+                    ["userId"] = new AttributeValue { S = userId },
+                    ["instanceId"] = new AttributeValue { S = instanceId }
+                },
+                UpdateExpression = "SET isNew = :isNew",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    [":isNew"] = new AttributeValue { BOOL = isNew }
+                }
+            };
+
+            try
+            {
+                await _client.UpdateItemAsync(request);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"카드 isNew 업데이트 실패: {ex.Message}");
                 return false;
             }
         }
