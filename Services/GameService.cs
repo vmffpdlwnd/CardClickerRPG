@@ -70,6 +70,15 @@ namespace CardClickerRPG.Services
             _autoClickTimer.Stop();
         }
 
+        // 콘솔 시스템 메시지 색상 출력
+        private void WriteSystemMessage(ConsoleColor color, string message)
+        {
+            var prev = Console.ForegroundColor;
+            Console.ForegroundColor = color;
+            Console.WriteLine(message);
+            Console.ForegroundColor = prev;
+        }
+
         // AUTO_CLICK 타이머 이벤트
         private async void OnAutoClickTimer(object sender, ElapsedEventArgs e)
         {
@@ -85,7 +94,7 @@ namespace CardClickerRPG.Services
                 _currentPlayer.ClickCount += totalClicks;
                 _currentPlayer.TotalClicks += totalClicks;
                 
-                Console.WriteLine($"\n[AUTO_CLICK] 자동 클릭 ×{totalClicks}!");
+                WriteSystemMessage(ConsoleColor.Cyan, $"\n[AUTO_CLICK] 자동 클릭 ×{totalClicks}!");
                 
                 // 100 도달 체크
                 if (_currentPlayer.ClickCount >= AppConfig.ClicksForCard)
@@ -107,7 +116,7 @@ namespace CardClickerRPG.Services
                             if (random.Next(100) < chance)
                             {
                                 cardMaster.Rarity = UpgradeRarity(cardMaster.Rarity);
-                                Console.WriteLine($"[LUCKY] 등급 상승! → {cardMaster.Rarity}");
+                                WriteSystemMessage(ConsoleColor.Magenta, $"[LUCKY] 등급 상승! → {cardMaster.Rarity}");
                             }
                         }
                         
@@ -178,7 +187,7 @@ namespace CardClickerRPG.Services
 
             if (clickMultiplier > 1)
             {
-                Console.WriteLine($"[CLICK_MULTIPLY] 클릭 ×{clickMultiplier}!");
+                WriteSystemMessage(ConsoleColor.Green, $"[CLICK_MULTIPLY] 클릭 ×{clickMultiplier}!");
             }
 
             // 100 클릭 달성?
@@ -204,7 +213,7 @@ namespace CardClickerRPG.Services
                     if (random.Next(100) < chance)
                     {
                         cardMaster.Rarity = UpgradeRarity(cardMaster.Rarity);
-                        Console.WriteLine($"[LUCKY] 등급 상승! → {cardMaster.Rarity}");
+                        WriteSystemMessage(ConsoleColor.Magenta, $"[LUCKY] 등급 상승! → {cardMaster.Rarity}");
                     }
                 }
                 
@@ -256,7 +265,7 @@ namespace CardClickerRPG.Services
                 int bonusCount = abilities["DUST_BONUS"];
                 float bonusMultiplier = 1.0f + (bonusCount * 0.5f); // 1장당 +50%
                 dustGain = (int)(dustGain * bonusMultiplier);
-                Console.WriteLine($"[DUST_BONUS] 가루 ×{bonusMultiplier:F1}!");
+                WriteSystemMessage(ConsoleColor.Yellow, $"[DUST_BONUS] 가루 ×{bonusMultiplier:F1}!");
             }
 
             _currentPlayer.Dust += dustGain;
@@ -291,7 +300,7 @@ namespace CardClickerRPG.Services
                 if (discountMultiplier < 0.1f) discountMultiplier = 0.1f; // 최소 10%
                 
                 cost = (int)(cost * discountMultiplier);
-                Console.WriteLine($"[UPGRADE_DISCOUNT] 비용 할인! {discountMultiplier * 100:F0}%");
+                WriteSystemMessage(ConsoleColor.Yellow, $"[UPGRADE_DISCOUNT] 비용 할인! {discountMultiplier * 100:F0}%");
             }
 
             if (_currentPlayer.Dust < cost)
