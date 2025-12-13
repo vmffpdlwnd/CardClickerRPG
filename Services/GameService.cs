@@ -40,39 +40,60 @@ namespace CardClickerRPG.Services
             // 카드 데이터 로드
             _playerCards = await _dynamoDBService.GetPlayerCardsAsync(userId);
             
-            // CardMaster 정보 로드 및 유효하지 않은 카드 제거
-            var invalidCards = new List<PlayerCard>();
-            for (int i = 0; i < _playerCards.Count; i++)
+            foreach (var card in _playerCards)
             {
-                var card = _playerCards[i];
                 card.MasterData = await _dynamoDBService.GetCardMasterAsync(card.CardId);
-                
-                if (card.MasterData == null)
+            }
+            
+            return true;
+        }
+
+        // 덱에서 활성화된 능력 개수 세기 (최대 3장 제한)
+        private Dictionary<string, int> GetActiveAbilities()
+        {
+            var deck = GetDeck();
+            var abilities = new Dictionary<string, int>();
+
+            foreach (var card in deck)
+            {
+                if (card.MasterData?.Ability != null)
                 {
-                    invalidCards.Add(card);
+                    string ability = card.MasterData.Ability;
+                    if (!abilities.ContainsKey(ability))
+                        abilities[ability] = 0;
+                    
+                    // 같은 능력은 최대 3장까지만 카운트
+                    if (abilities[ability] < 3)
+                    {
+                        abilities[ability]++;
+                    }
                 }
             }
+
+            return abilities;
+        }
+
+        // 클릭 배율 계산 (곱셈 중첩, 최대 ×8)
+        private int GetClickMultiplier()
+        {
+            var abilities = GetActiveAbilities();
+            int multiplier = 1;
             
-            // 유효하지 않은 카드 삭제
-            foreach (var card in invalidCards)
+            if (abilities.ContainsKey("CLICK_MULTIPLY"))
             {
-                await _dynamoDBService.DeleteCardAsync(userId, card.InstanceId);
-                _playerCards.Remove(card);
+                int count = abilities["CLICK_MULTIPLY"]; // 최대 3
+                multiplier = (int)Math.Pow(2, count); // 2^count
             }
             
-            if (invalidCards.Count > 0)
-            {
-                Console.WriteLine($"[INFO] 유효하지 않은 카드 {invalidCards.Count}개 제거됨");
-            }
-                  
-            return true;
+            return multiplier;
         }
 
         // 클릭
         public async Task<(bool cardObtained, PlayerCard newCard)> ClickAsync()
         {
-            _currentPlayer.ClickCount++;
-            _currentPlayer.TotalClicks++;
+            int clickMultiplier = GetClickMultiplier();
+            _currentPlayer.ClickCount += clickMultiplier;
+            _currentPlayer.TotalClicks += clickMultiplier;
 
             // 100 클릭 달성?
             if (_currentPlayer.ClickCount >= AppConfig.ClicksForCard)
@@ -82,6 +103,24 @@ namespace CardClickerRPG.Services
                 // 랜덤 카드 획득
                 string randomCardId = await _dynamoDBService.GetRandomCardIdAsync();
                 var cardMaster = await _dynamoDBService.GetCardMasterAsync(randomCardId);
+                
+                if (cardMaster == null)
+                    return (false, null);
+
+                // LUCKY 능력 체크 (등급 상승)
+                var abilities = GetActiveAbilities();
+                if (abilities.ContainsKey("LUCKY"))
+                {
+                    int luckyCount = abilities["LUCKY"];
+                    int chance = luckyCount * 20; // 1장당 20% 확률 (최대 60%)
+                    
+                    var random = new Random();
+                    if (random.Next(100) < chance)
+                    {
+                        cardMaster.Rarity = UpgradeRarity(cardMaster.Rarity);
+                        Console.WriteLine($"[LUCKY] 등급 상승! → {cardMaster.Rarity}");
+                    }
+                }
                 
                 var newCard = new PlayerCard
                 {
@@ -102,6 +141,18 @@ namespace CardClickerRPG.Services
             return (false, null);
         }
 
+        // 등급 상승
+        private string UpgradeRarity(string rarity)
+        {
+            return rarity switch
+            {
+                "common" => "rare",
+                "rare" => "epic",
+                "epic" => "legendary",
+                _ => rarity
+            };
+        }
+
         // 카드 분해
         public async Task<bool> DisenchantCardAsync(string instanceId)
         {
@@ -111,6 +162,17 @@ namespace CardClickerRPG.Services
 
             // 가루 획득
             int dustGain = AppConfig.GetDustByRarity(card.MasterData.Rarity);
+            
+            // DUST_BONUS 능력 적용
+            var abilities = GetActiveAbilities();
+            if (abilities.ContainsKey("DUST_BONUS"))
+            {
+                int bonusCount = abilities["DUST_BONUS"];
+                float bonusMultiplier = 1.0f + (bonusCount * 0.5f); // 1장당 +50%
+                dustGain = (int)(dustGain * bonusMultiplier);
+                Console.WriteLine($"[DUST_BONUS] 가루 ×{bonusMultiplier:F1}!");
+            }
+
             _currentPlayer.Dust += dustGain;
 
             // 카드 삭제
@@ -133,6 +195,19 @@ namespace CardClickerRPG.Services
 
             // 강화 비용 확인
             int cost = AppConfig.GetUpgradeCost(card.Level);
+            
+            // UPGRADE_DISCOUNT 능력 적용
+            var abilities = GetActiveAbilities();
+            if (abilities.ContainsKey("UPGRADE_DISCOUNT"))
+            {
+                int discountCount = abilities["UPGRADE_DISCOUNT"];
+                float discountMultiplier = 1.0f - (discountCount * 0.3f); // 1장당 -30%
+                if (discountMultiplier < 0.1f) discountMultiplier = 0.1f; // 최소 10%
+                
+                cost = (int)(cost * discountMultiplier);
+                Console.WriteLine($"[UPGRADE_DISCOUNT] 비용 할인! {discountMultiplier * 100:F0}%");
+            }
+
             if (_currentPlayer.Dust < cost)
             {
                 Console.WriteLine($"가루 부족! (필요: {cost}, 보유: {_currentPlayer.Dust})");
@@ -199,6 +274,33 @@ namespace CardClickerRPG.Services
                 Console.WriteLine("저장 완료!");
             }
             return success;
+        }
+
+        // 활성화된 능력 표시
+        public void ShowActiveAbilities()
+        {
+            var abilities = GetActiveAbilities();
+            
+            if (abilities.Count == 0)
+            {
+                Console.WriteLine("활성화된 능력 없음");
+                return;
+            }
+
+            Console.WriteLine("=== 덱 활성 능력 ===");
+            foreach (var ability in abilities)
+            {
+                string desc = ability.Key switch
+                {
+                    "AUTO_CLICK" => $"자동 클릭 ×{ability.Value}",
+                    "CLICK_MULTIPLY" => $"클릭 배율 ×{(int)Math.Pow(2, ability.Value)}",
+                    "DUST_BONUS" => $"분해 보너스 +{ability.Value * 50}%",
+                    "UPGRADE_DISCOUNT" => $"강화 할인 -{ability.Value * 30}%",
+                    "LUCKY" => $"행운 {ability.Value * 20}%",
+                    _ => ability.Key
+                };
+                Console.WriteLine($"  • {desc}");
+            }
         }
     }
 }

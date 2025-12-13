@@ -171,6 +171,9 @@ namespace CardClickerRPG
                 Console.WriteLine($"{i + 1}. [{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level} - 전투력 {card.GetPower()}");
                 Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
             }
+
+            Console.WriteLine();
+            game.ShowActiveAbilities();
         }
 
         static async Task HandleDisenchant(GameService game)
