@@ -404,7 +404,7 @@ FodyWeavers.xsd
 .aws/
 *.csv
 credentials
-config
+.aws/config
 
 # App Settings - 환경별 설정 파일만 제외 (실제 비밀키 포함)
 appsettings.Development.json
