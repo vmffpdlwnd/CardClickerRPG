@@ -1,13 +1,16 @@
 using CardClickerRPG.Models;
 using CardClickerRPG.Config;
 using System.Timers;
+using PlayFab;
+using PlayFab.ClientModels;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace CardClickerRPG.Services
 {
     public class GameService
     {
         private readonly PlayFabService _playFabService;
-        private readonly DynamoDBService _dynamoDBService;
         
         private Player _currentPlayer;
         private List<PlayerCard> _playerCards;
@@ -16,10 +19,9 @@ namespace CardClickerRPG.Services
         public Player CurrentPlayer => _currentPlayer;
         public List<PlayerCard> PlayerCards => _playerCards;
 
-        public GameService(PlayFabService playFabService, DynamoDBService dynamoDBService)
+        public GameService(PlayFabService playFabService)
         {
             _playFabService = playFabService;
-            _dynamoDBService = dynamoDBService;
             _playerCards = new List<PlayerCard>();
             
             // AUTO_CLICK 타이머 설정 (5초)
@@ -28,28 +30,89 @@ namespace CardClickerRPG.Services
             _autoClickTimer.AutoReset = true;
         }
 
+        // PlayFab CloudScript를 호출하고 결과를 JSON에서 역직렬화하는 제네릭 헬퍼 메서드
+        private async Task<T> ExecuteCloudScriptAsync<T>(string functionName, object functionParameter)
+        {
+            var request = new ExecuteCloudScriptRequest
+            {
+                FunctionName = functionName,
+                FunctionParameter = functionParameter,
+                GeneratePlayStreamEvent = true
+            };
+
+            var result = await PlayFabClientAPI.ExecuteCloudScriptAsync(request);
+            
+            if (result.Error != null)
+            {
+                throw new System.Exception(result.Error.GenerateErrorReport());
+            }
+
+            if (result.Result.FunctionResult != null)
+            {
+                // CloudScript가 반환하는 JSON은 종종 최상위 객체 안에 실제 데이터가 포함됩니다.
+                // 예: { "player": { ... } } 또는 { "cards": [ ... ] }
+                // 이 구조를 처리하기 위해 JSON을 동적으로 파싱합니다.
+                var jsonResult = result.Result.FunctionResult.ToString();
+                var jsonObject = JsonConvert.DeserializeObject<dynamic>(jsonResult);
+
+                // 예상되는 프로퍼티 이름을 확인하여 적절한 데이터를 역직렬화합니다.
+                if (jsonObject.player != null)
+                {
+                    return JsonConvert.DeserializeObject<T>(jsonObject.player.ToString());
+                }
+                else if (jsonObject.cards != null)
+                {
+                    return JsonConvert.DeserializeObject<T>(jsonObject.cards.ToString());
+                }
+                else if (jsonObject.cardMaster != null)
+                {
+                    return JsonConvert.DeserializeObject<T>(jsonObject.cardMaster.ToString());
+                }
+                else if (jsonObject.cardId != null)
+                {
+                    return JsonConvert.DeserializeObject<T>(jsonObject.cardId.ToString());
+                }
+                else if (jsonObject.success != null)
+                {
+                    // 성공 여부만 반환하는 경우
+                    return default(T); // Task<object>의 경우 null이 반환됩니다.
+                }
+                else
+                {
+                    // 예상치 못한 구조이거나, 최상위 객체 자체가 데이터인 경우
+                    return JsonConvert.DeserializeObject<T>(jsonResult);
+                }
+            }
+            
+            // FunctionResult가 null인 경우 (예: CloudScript에서 명시적으로 null을 반환)
+            return default(T);
+        }
+
         // 게임 초기화 (로그인 후 데이터 로드)
         public async Task<bool> InitializeAsync()
         {
             string userId = _playFabService.PlayFabId;
             
-            // 플레이어 데이터 로드
-            _currentPlayer = await _dynamoDBService.GetPlayerAsync(userId);
+            // 플레이어 데이터 로드 (CloudScript 호출)
+            _currentPlayer = await ExecuteCloudScriptAsync<Player>("getPlayer", new { userId });
             
-            // 신규 플레이어면 생성
+            // 신규 플레이어면 생성 (CloudScript 호출)
             if (_currentPlayer == null)
             {
-                _currentPlayer = new Player { UserId = userId };
-                await _dynamoDBService.CreatePlayerAsync(_currentPlayer);
+                var newPlayer = new Player { UserId = userId };
+                // createPlayer는 성공 여부만 반환하므로 반환값은 사용하지 않음
+                await ExecuteCloudScriptAsync<object>("createPlayer", new { player = newPlayer });
+                _currentPlayer = newPlayer; 
                 Console.WriteLine("신규 플레이어 생성!");
             }
             
-            // 카드 데이터 로드
-            _playerCards = await _dynamoDBService.GetPlayerCardsAsync(userId);
+            // 카드 데이터 로드 (CloudScript 호출)
+            _playerCards = await ExecuteCloudScriptAsync<List<PlayerCard>>("getPlayerCards", new { userId });
             
             foreach (var card in _playerCards)
             {
-                card.MasterData = await _dynamoDBService.GetCardMasterAsync(card.CardId);
+                // 카드 마스터 데이터 로드 (CloudScript 호출)
+                card.MasterData = await ExecuteCloudScriptAsync<CardMaster>("getCardMaster", new { cardId = card.CardId });
             }
             
             // AUTO_CLICK 타이머 시작
@@ -101,8 +164,8 @@ namespace CardClickerRPG.Services
                 {
                     _currentPlayer.ClickCount -= AppConfig.ClicksForCard;
                     
-                    string randomCardId = await _dynamoDBService.GetRandomCardIdAsync();
-                    var cardMaster = await _dynamoDBService.GetCardMasterAsync(randomCardId);
+                    string randomCardId = await ExecuteCloudScriptAsync<string>("getRandomCardId", new { });
+                    var cardMaster = await ExecuteCloudScriptAsync<CardMaster>("getCardMaster", new { cardId = randomCardId });
                     
                     if (cardMaster != null)
                     {
@@ -127,7 +190,7 @@ namespace CardClickerRPG.Services
                             MasterData = cardMaster
                         };
                         
-                        await _dynamoDBService.AddPlayerCardAsync(newCard);
+                        await ExecuteCloudScriptAsync<object>("addPlayerCard", new { card = newCard });
                         _playerCards.Add(newCard);
                         
                         Console.WriteLine($"★ 카드 획득! [{cardMaster.Rarity}] {cardMaster.Name}");
@@ -195,9 +258,9 @@ namespace CardClickerRPG.Services
             {
                 _currentPlayer.ClickCount = 0;
                 
-                // 랜덤 카드 획득
-                string randomCardId = await _dynamoDBService.GetRandomCardIdAsync();
-                var cardMaster = await _dynamoDBService.GetCardMasterAsync(randomCardId);
+                // 랜덤 카드 획득 (CloudScript 호출)
+                string randomCardId = await ExecuteCloudScriptAsync<string>("getRandomCardId", new { });
+                var cardMaster = await ExecuteCloudScriptAsync<CardMaster>("getCardMaster", new { cardId = randomCardId });
                 
                 if (cardMaster == null)
                     return (false, null);
@@ -224,7 +287,7 @@ namespace CardClickerRPG.Services
                     MasterData = cardMaster
                 };
                 
-                await _dynamoDBService.AddPlayerCardAsync(newCard);
+                await ExecuteCloudScriptAsync<object>("addPlayerCard", new { card = newCard });
                 _playerCards.Add(newCard);
                 
                 // 덱 전투력 재계산
@@ -270,8 +333,8 @@ namespace CardClickerRPG.Services
 
             _currentPlayer.Dust += dustGain;
 
-            // 카드 삭제
-            await _dynamoDBService.DeleteCardAsync(_currentPlayer.UserId, instanceId);
+            // 카드 삭제 (CloudScript 호출)
+            await ExecuteCloudScriptAsync<object>("deleteCard", new { userId = _currentPlayer.UserId, instanceId = instanceId });
             _playerCards.Remove(card);
 
             // 덱 전투력 재계산
@@ -313,7 +376,8 @@ namespace CardClickerRPG.Services
             _currentPlayer.Dust -= cost;
             card.Level++;
             
-            await _dynamoDBService.UpgradeCardAsync(_currentPlayer.UserId, instanceId, card.Level);
+            // CloudScript 호출
+            await ExecuteCloudScriptAsync<object>("upgradeCard", new { userId = _currentPlayer.UserId, instanceId, newLevel = card.Level });
 
             // 덱 전투력 재계산
             await RecalculateDeckPowerAsync();
@@ -352,7 +416,7 @@ namespace CardClickerRPG.Services
             foreach (var card in _playerCards.Where(c => c.IsNew))
             {
                 card.IsNew = false;
-                tasks.Add(_dynamoDBService.UpdateCardIsNewAsync(card.UserId, card.InstanceId, false));
+                tasks.Add(ExecuteCloudScriptAsync<object>("updateCardIsNew", new { userId = card.UserId, instanceId = card.InstanceId, isNew = false }));
             }
 
             if (tasks.Count > 0)
@@ -395,12 +459,9 @@ namespace CardClickerRPG.Services
         // 저장
         public async Task<bool> SaveAsync()
         {
-            bool success = await _dynamoDBService.UpdatePlayerAsync(_currentPlayer);
-            if (success)
-            {
-                Console.WriteLine("저장 완료!");
-            }
-            return success;
+            await ExecuteCloudScriptAsync<object>("updatePlayer", new { player = _currentPlayer });
+            Console.WriteLine("저장 완료!");
+            return true;
         }
 
         // 활성화된 능력 표시

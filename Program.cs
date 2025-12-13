@@ -12,8 +12,7 @@ namespace CardClickerRPG
 
             // 서비스 초기화
             var playFabService = new PlayFabService();
-            var dynamoDBService = new DynamoDBService();
-            var gameService = new GameService(playFabService, dynamoDBService);
+            var gameService = new GameService(playFabService);
 
             // 로그인
             Console.Write("사용자 ID 입력 (아무거나): ");
