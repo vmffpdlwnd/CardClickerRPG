@@ -8,6 +8,7 @@ namespace CardClickerRPG.Models
         public int TotalClicks { get; set; }         // 총 클릭 수
         public int DeckPower { get; set; }           // 덱 총 전투력
         public string LastSaveTime { get; set; }     // 마지막 저장 시간
+        public List<string> DeckCardIds { get; set; }  // 덱에 편성된 카드 instanceId 리스트
 
         public Player()
         {

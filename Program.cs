@@ -53,7 +53,7 @@ namespace CardClickerRPG
                         ShowMyCards(gameService);
                         break;
                     case "3":
-                        ShowDeck(gameService);
+                        await HandleDeckManagement(gameService);
                         break;
                     case "4":
                         await HandleDisenchant(gameService);
@@ -70,6 +70,7 @@ namespace CardClickerRPG
                     case "8":
                         Console.WriteLine("저장 중...");
                         await gameService.SaveAsync();
+                        gameService.StopAutoClick();  // 타이머 정지
                         Console.WriteLine("게임 종료!");
                         running = false;
                         break;
@@ -97,7 +98,7 @@ namespace CardClickerRPG
             Console.WriteLine();
             Console.WriteLine("[1] 클릭하기");
             Console.WriteLine("[2] 내 카드 보기");
-            Console.WriteLine("[3] 내 덱 보기");
+            Console.WriteLine("[3] 내 덱 편성");
             Console.WriteLine("[4] 카드 분해");
             Console.WriteLine("[5] 카드 강화");
             Console.WriteLine("[6] 리더보드");
@@ -149,31 +150,110 @@ namespace CardClickerRPG
             }
         }
 
-        static void ShowDeck(GameService game)
+        static async Task HandleDeckManagement(GameService game)
         {
-            var deck = game.GetDeck();
-            
-            if (deck.Count == 0)
+            while (true)
             {
-                Console.WriteLine("덱에 카드가 없습니다.");
-                return;
+                Console.Clear();
+                
+                // 덱 표시
+                var deck = game.GetDeck();
+                
+                if (deck.Count == 0)
+                {
+                    Console.WriteLine("덱에 카드가 없습니다.");
+                    Console.WriteLine("\n[0] 돌아가기");
+                    Console.Write("선택: ");
+                    Console.ReadLine();
+                    break;
+                }
+
+                Console.WriteLine("=== 내 덱 (상위 5장) ===");
+                Console.WriteLine($"총 전투력: {game.CurrentPlayer.DeckPower}");
+                Console.WriteLine();
+                
+                for (int i = 0; i < deck.Count; i++)
+                {
+                    var card = deck[i];
+                    if (card.MasterData == null) continue;
+
+                    Console.WriteLine($"{i + 1}. [{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level} - 전투력 {card.GetPower()}");
+                    Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
+                }
+                
+                Console.WriteLine();
+                game.ShowActiveAbilities();
+                
+                Console.WriteLine();
+                Console.WriteLine("[1-5] 해당 슬롯 카드 교체");
+                Console.WriteLine("[9] 자동 편성으로 리셋");
+                Console.WriteLine("[0] 돌아가기");
+                Console.Write("선택: ");
+                
+                string input = Console.ReadLine();
+                Console.WriteLine();
+
+                if (input == "0") break;
+
+                if (input == "9")
+                {
+                    Console.Write("정말 자동 편성으로 리셋하시겠습니까? (y/n): ");
+                    if (Console.ReadLine()?.ToLower() == "y")
+                    {
+                        game.ResetDeckToAuto();
+                        await game.RecalculateDeckPowerAsync();
+                        Console.WriteLine("자동 편성으로 전환되었습니다!");
+                        Console.WriteLine("\n계속하려면 Enter...");
+                        Console.ReadLine();
+                    }
+                    continue;
+                }
+
+                // 슬롯 선택 (1-5)
+                if (!int.TryParse(input, out int slot) || slot < 1 || slot > 5)
+                {
+                    continue;
+                }
+
+                // 덱 외 카드 목록 표시
+                var deckIds = deck.Select(c => c.InstanceId).ToHashSet();
+                var availableCards = game.PlayerCards
+                    .Where(c => !deckIds.Contains(c.InstanceId))
+                    .OrderByDescending(c => c.GetPower())
+                    .ToList();
+
+                if (availableCards.Count == 0)
+                {
+                    Console.WriteLine("교체 가능한 카드가 없습니다.");
+                    Console.WriteLine("\n계속하려면 Enter...");
+                    Console.ReadLine();
+                    continue;
+                }
+
+                Console.WriteLine("=== 교체 가능한 카드 ===");
+                for (int i = 0; i < availableCards.Count; i++)
+                {
+                    var card = availableCards[i];
+                    if (card.MasterData == null) continue;
+                    Console.WriteLine($"{i + 1}. [{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level} - 전투력 {card.GetPower()}");
+                    Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
+                }
+
+                Console.Write("\n교체할 카드 번호 (취소: 0): ");
+                if (!int.TryParse(Console.ReadLine(), out int cardIdx) || cardIdx < 1 || cardIdx > availableCards.Count)
+                {
+                    continue;
+                }
+
+                var selectedCard = availableCards[cardIdx - 1];
+                if (game.SwapDeckCard(slot - 1, selectedCard.InstanceId))
+                {
+                    await game.RecalculateDeckPowerAsync();
+                    Console.WriteLine("교체 완료!");
+                    Console.WriteLine("\n계속하려면 Enter...");
+                    Console.ReadLine();
+                }
             }
-
-            Console.WriteLine("=== 내 덱 (상위 5장 자동 편성) ===");
-            Console.WriteLine($"총 전투력: {game.CurrentPlayer.DeckPower}");
-            Console.WriteLine();
-            
-            for (int i = 0; i < deck.Count; i++)
-            {
-                var card = deck[i];
-                if (card.MasterData == null) continue;
-
-                Console.WriteLine($"{i + 1}. [{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level} - 전투력 {card.GetPower()}");
-                Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
-            }
-
-            Console.WriteLine();
-            game.ShowActiveAbilities();
         }
 
         static async Task HandleDisenchant(GameService game)

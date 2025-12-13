@@ -25,7 +25,7 @@ namespace CardClickerRPG.Models
                 "CLICK_MULTIPLY" => "클릭 배율 (×2)",
                 "DUST_BONUS" => "분해 보너스 (+50%)",
                 "UPGRADE_DISCOUNT" => "강화 할인 (-30%)",
-                "LUCKY" => "행운 (등급 상승 10%)",
+                "LUCKY" => "행운 (등급 상승 20%)",
                 _ => "없음"
             };
         }

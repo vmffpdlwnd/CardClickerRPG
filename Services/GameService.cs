@@ -1,5 +1,6 @@
 using CardClickerRPG.Models;
 using CardClickerRPG.Config;
+using System.Timers;
 
 namespace CardClickerRPG.Services
 {
@@ -10,6 +11,7 @@ namespace CardClickerRPG.Services
         
         private Player _currentPlayer;
         private List<PlayerCard> _playerCards;
+        private System.Timers.Timer _autoClickTimer;
 
         public Player CurrentPlayer => _currentPlayer;
         public List<PlayerCard> PlayerCards => _playerCards;
@@ -19,6 +21,11 @@ namespace CardClickerRPG.Services
             _playFabService = playFabService;
             _dynamoDBService = dynamoDBService;
             _playerCards = new List<PlayerCard>();
+            
+            // AUTO_CLICK 타이머 설정 (5초)
+            _autoClickTimer = new System.Timers.Timer(5000);
+            _autoClickTimer.Elapsed += OnAutoClickTimer;
+            _autoClickTimer.AutoReset = true;
         }
 
         // 게임 초기화 (로그인 후 데이터 로드)
@@ -45,7 +52,81 @@ namespace CardClickerRPG.Services
                 card.MasterData = await _dynamoDBService.GetCardMasterAsync(card.CardId);
             }
             
+            // AUTO_CLICK 타이머 시작
+            StartAutoClick();
+            
             return true;
+        }
+
+        // AUTO_CLICK 타이머 시작
+        public void StartAutoClick()
+        {
+            _autoClickTimer.Start();
+        }
+
+        // AUTO_CLICK 타이머 정지
+        public void StopAutoClick()
+        {
+            _autoClickTimer.Stop();
+        }
+
+        // AUTO_CLICK 타이머 이벤트
+        private async void OnAutoClickTimer(object sender, ElapsedEventArgs e)
+        {
+            var abilities = GetActiveAbilities();
+            
+            if (abilities.ContainsKey("AUTO_CLICK"))
+            {
+                int autoClickCount = abilities["AUTO_CLICK"];
+                int clickMultiplier = GetClickMultiplier();
+                
+                int totalClicks = autoClickCount * clickMultiplier;
+                
+                _currentPlayer.ClickCount += totalClicks;
+                _currentPlayer.TotalClicks += totalClicks;
+                
+                Console.WriteLine($"\n[AUTO_CLICK] 자동 클릭 ×{totalClicks}!");
+                
+                // 100 도달 체크
+                if (_currentPlayer.ClickCount >= AppConfig.ClicksForCard)
+                {
+                    _currentPlayer.ClickCount -= AppConfig.ClicksForCard;
+                    
+                    string randomCardId = await _dynamoDBService.GetRandomCardIdAsync();
+                    var cardMaster = await _dynamoDBService.GetCardMasterAsync(randomCardId);
+                    
+                    if (cardMaster != null)
+                    {
+                        // LUCKY 체크
+                        if (abilities.ContainsKey("LUCKY"))
+                        {
+                            int luckyCount = abilities["LUCKY"];
+                            int chance = luckyCount * 20;
+                            
+                            var random = new Random();
+                            if (random.Next(100) < chance)
+                            {
+                                cardMaster.Rarity = UpgradeRarity(cardMaster.Rarity);
+                                Console.WriteLine($"[LUCKY] 등급 상승! → {cardMaster.Rarity}");
+                            }
+                        }
+                        
+                        var newCard = new PlayerCard
+                        {
+                            UserId = _currentPlayer.UserId,
+                            CardId = randomCardId,
+                            MasterData = cardMaster
+                        };
+                        
+                        await _dynamoDBService.AddPlayerCardAsync(newCard);
+                        _playerCards.Add(newCard);
+                        
+                        Console.WriteLine($"★ 카드 획득! [{cardMaster.Rarity}] {cardMaster.Name}");
+                        
+                        await RecalculateDeckPowerAsync();
+                    }
+                }
+            }
         }
 
         // 덱에서 활성화된 능력 개수 세기 (최대 3장 제한)
@@ -94,6 +175,11 @@ namespace CardClickerRPG.Services
             int clickMultiplier = GetClickMultiplier();
             _currentPlayer.ClickCount += clickMultiplier;
             _currentPlayer.TotalClicks += clickMultiplier;
+
+            if (clickMultiplier > 1)
+            {
+                Console.WriteLine($"[CLICK_MULTIPLY] 클릭 ×{clickMultiplier}!");
+            }
 
             // 100 클릭 달성?
             if (_currentPlayer.ClickCount >= AppConfig.ClicksForCard)
@@ -250,9 +336,25 @@ namespace CardClickerRPG.Services
                 .ToList();
         }
 
-        // 내 덱 보기 (상위 5장)
+        // 내 덱 보기 (자동/수동 분기)
         public List<PlayerCard> GetDeck()
         {
+            // 수동 편성된 덱이 있으면 그걸 사용
+            if (_currentPlayer.DeckCardIds != null && _currentPlayer.DeckCardIds.Count > 0)
+            {
+                var deck = new List<PlayerCard>();
+                foreach (var instanceId in _currentPlayer.DeckCardIds)
+                {
+                    var card = _playerCards.FirstOrDefault(c => c.InstanceId == instanceId);
+                    if (card != null)
+                    {
+                        deck.Add(card);
+                    }
+                }
+                return deck;
+            }
+            
+            // 자동 편성 (전투력 상위 5장)
             return _playerCards
                 .OrderByDescending(c => c.GetPower())
                 .Take(5)
@@ -292,7 +394,7 @@ namespace CardClickerRPG.Services
             {
                 string desc = ability.Key switch
                 {
-                    "AUTO_CLICK" => $"자동 클릭 ×{ability.Value}",
+                    "AUTO_CLICK" => $"자동 클릭 ×{ability.Value} (5초마다)",
                     "CLICK_MULTIPLY" => $"클릭 배율 ×{(int)Math.Pow(2, ability.Value)}",
                     "DUST_BONUS" => $"분해 보너스 +{ability.Value * 50}%",
                     "UPGRADE_DISCOUNT" => $"강화 할인 -{ability.Value * 30}%",
@@ -301,6 +403,77 @@ namespace CardClickerRPG.Services
                 };
                 Console.WriteLine($"  • {desc}");
             }
+        }
+
+        // 종료 시 타이머 정리
+        public void Dispose()
+        {
+            _autoClickTimer?.Stop();
+            _autoClickTimer?.Dispose();
+        }
+
+        // 덱 초기화 (자동 편성)
+        public void InitializeDeck()
+        {
+            var topCards = _playerCards
+                .OrderByDescending(c => c.GetPower())
+                .Take(5)
+                .ToList();
+            
+            _currentPlayer.DeckCardIds = topCards.Select(c => c.InstanceId).ToList();
+            Console.WriteLine("덱이 자동 편성되었습니다.");
+        }
+
+        // 덱 카드 교체
+        public bool SwapDeckCard(int deckSlot, string newCardInstanceId)
+        {
+            // 덱이 비어있으면 초기화
+            if (_currentPlayer.DeckCardIds == null || _currentPlayer.DeckCardIds.Count == 0)
+            {
+                InitializeDeck();
+            }
+
+            // 슬롯 범위 체크
+            if (deckSlot < 0 || deckSlot >= _currentPlayer.DeckCardIds.Count)
+            {
+                Console.WriteLine("잘못된 슬롯 번호입니다.");
+                return false;
+            }
+
+            // 새 카드가 존재하는지 확인
+            var newCard = _playerCards.FirstOrDefault(c => c.InstanceId == newCardInstanceId);
+            if (newCard == null)
+            {
+                Console.WriteLine("해당 카드를 찾을 수 없습니다.");
+                return false;
+            }
+
+            // 이미 덱에 있는 카드인지 확인
+            if (_currentPlayer.DeckCardIds.Contains(newCardInstanceId))
+            {
+                Console.WriteLine("이미 덱에 편성된 카드입니다.");
+                return false;
+            }
+
+            // 교체
+            string oldCardId = _currentPlayer.DeckCardIds[deckSlot];
+            var oldCard = _playerCards.FirstOrDefault(c => c.InstanceId == oldCardId);
+            
+            _currentPlayer.DeckCardIds[deckSlot] = newCardInstanceId;
+            
+            if (oldCard?.MasterData != null && newCard?.MasterData != null)
+            {
+                Console.WriteLine($"[교체] {oldCard.MasterData.Name} → {newCard.MasterData.Name}");
+            }
+            
+            return true;
+        }
+
+        // 덱 자동 편성으로 리셋
+        public void ResetDeckToAuto()
+        {
+            _currentPlayer.DeckCardIds.Clear();
+            Console.WriteLine("덱이 자동 편성 모드로 전환되었습니다.");
         }
     }
 }

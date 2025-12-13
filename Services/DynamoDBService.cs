@@ -49,7 +49,8 @@ namespace CardClickerRPG.Services
                 ["dust"] = new AttributeValue { N = player.Dust.ToString() },
                 ["totalClicks"] = new AttributeValue { N = player.TotalClicks.ToString() },
                 ["deckPower"] = new AttributeValue { N = player.DeckPower.ToString() },
-                ["lastSaveTime"] = new AttributeValue { S = player.LastSaveTime }
+                ["lastSaveTime"] = new AttributeValue { S = player.LastSaveTime },
+                ["deckCardIds"] = new AttributeValue { L = player.DeckCardIds?.Select(id => new AttributeValue { S = id }).ToList() ?? new List<AttributeValue>() }
             };
 
             var request = new PutItemRequest
@@ -96,7 +97,10 @@ namespace CardClickerRPG.Services
                     Dust = int.Parse(item["dust"].N),
                     TotalClicks = int.Parse(item["totalClicks"].N),
                     DeckPower = int.Parse(item["deckPower"].N),
-                    LastSaveTime = item["lastSaveTime"].S
+                    LastSaveTime = item["lastSaveTime"].S,
+                    DeckCardIds = item.ContainsKey("deckCardIds") 
+                        ? item["deckCardIds"].L.Select(attr => attr.S).ToList() 
+                        : new List<string>()
                 };
             }
             catch (Exception ex)
@@ -117,14 +121,15 @@ namespace CardClickerRPG.Services
                 {
                     ["userId"] = new AttributeValue { S = player.UserId }
                 },
-                UpdateExpression = "SET clickCount = :cc, dust = :d, totalClicks = :tc, deckPower = :dp, lastSaveTime = :lst",
+                UpdateExpression = "SET clickCount = :cc, dust = :d, totalClicks = :tc, deckPower = :dp, lastSaveTime = :lst, deckCardIds = :deck",
                 ExpressionAttributeValues = new Dictionary<string, AttributeValue>
                 {
                     [":cc"] = new AttributeValue { N = player.ClickCount.ToString() },
                     [":d"] = new AttributeValue { N = player.Dust.ToString() },
                     [":tc"] = new AttributeValue { N = player.TotalClicks.ToString() },
                     [":dp"] = new AttributeValue { N = player.DeckPower.ToString() },
-                    [":lst"] = new AttributeValue { S = player.LastSaveTime }
+                    [":lst"] = new AttributeValue { S = player.LastSaveTime },
+                    [":deck"] = new AttributeValue { L = player.DeckCardIds?.Select(id => new AttributeValue { S = id }).ToList() ?? new List<AttributeValue>() }
                 }
             };
 
