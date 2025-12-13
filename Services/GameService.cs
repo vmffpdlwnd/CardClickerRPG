@@ -336,6 +336,15 @@ namespace CardClickerRPG.Services
                 .ToList();
         }
 
+        // NEW 플래그 제거
+        public void ClearNewFlags()
+        {
+            foreach (var card in _playerCards)
+            {
+                card.IsNew = false;
+            }
+        }
+
         // 내 덱 보기 (자동/수동 분기)
         public List<PlayerCard> GetDeck()
         {

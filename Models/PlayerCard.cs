@@ -7,6 +7,7 @@ namespace CardClickerRPG.Models
         public string CardId { get; set; }          // CardMaster 참조
         public int Level { get; set; }              // 강화 레벨
         public string AcquiredAt { get; set; }      // 획득 시간
+        public bool IsNew { get; set; }             // 신규 획득 표시
 
         // CardMaster 정보 (조인 후 채워짐)
         public CardMaster MasterData { get; set; }
@@ -16,6 +17,7 @@ namespace CardClickerRPG.Models
             InstanceId = Guid.NewGuid().ToString();
             Level = 1;
             AcquiredAt = DateTime.UtcNow.ToString("o");
+            IsNew = true;  // 새로 생성된 카드는 NEW
         }
 
         // 전투력 계산 (레벨 포함)

@@ -129,6 +129,8 @@ namespace CardClickerRPG
         static void ShowMyCards(GameService game)
         {
             var cards = game.GetCardsSortedByPower();
+            var deck = game.GetDeck();
+            var deckIds = deck.Select(c => c.InstanceId).ToHashSet();
             
             if (cards.Count == 0)
             {
@@ -144,10 +146,35 @@ namespace CardClickerRPG
                 var card = cards[i];
                 if (card.MasterData == null) continue;
 
-                Console.WriteLine($"{i + 1}. [{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level}");
+                Console.Write($"{i + 1}. ");
+                
+                // NEW 태그 (노란색 강조)
+                if (card.IsNew)
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.Write("(NEW) ");
+                    Console.ResetColor();
+                }
+                
+                // 덱 편성 중 태그 (청록색)
+                if (deckIds.Contains(card.InstanceId))
+                {
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.Write("[덱 편성 중] ");
+                    Console.WriteLine($"[{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level}");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    Console.WriteLine($"[{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level}");
+                }
+                
                 Console.WriteLine($"   HP:{card.MasterData.HP} ATK:{card.MasterData.ATK} DEF:{card.MasterData.DEF} | 전투력: {card.GetPower()}");
                 Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
             }
+            
+            // 카드를 확인한 후 NEW 플래그 제거
+            game.ClearNewFlags();
         }
 
         static async Task HandleDeckManagement(GameService game)
@@ -183,6 +210,7 @@ namespace CardClickerRPG
                 
                 Console.WriteLine();
                 game.ShowActiveAbilities();
+                Console.WriteLine("※ 같은 능력은 최대 3장까지만 적용됩니다.");
                 
                 Console.WriteLine();
                 Console.WriteLine("[1-5] 해당 슬롯 카드 교체");
@@ -258,18 +286,65 @@ namespace CardClickerRPG
 
         static async Task HandleDisenchant(GameService game)
         {
-            ShowMyCards(game);
+            var cards = game.GetCardsSortedByPower();
+            var deck = game.GetDeck();
+            var deckIds = deck.Select(c => c.InstanceId).ToHashSet();
             
-            if (game.PlayerCards.Count == 0)
+            if (cards.Count == 0)
+            {
+                Console.WriteLine("보유한 카드가 없습니다.");
+                Console.WriteLine("\n계속하려면 Enter...");
+                Console.ReadLine();
                 return;
+            }
+
+            Console.WriteLine("=== 보유 카드 목록 (전투력 순) ===");
+            
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("※ [덱 편성 중] 카드는 분해할 수 없습니다.");
+            Console.ResetColor();
+            
+            Console.WriteLine();
+            
+            for (int i = 0; i < cards.Count; i++)
+            {
+                var card = cards[i];
+                if (card.MasterData == null) continue;
+
+                // 덱 카드는 색상 강조
+                if (deckIds.Contains(card.InstanceId))
+                {
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.Write($"{i + 1}. [덱 편성 중] ");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    Console.Write($"{i + 1}. ");
+                }
+                
+                Console.WriteLine($"[{card.MasterData.Rarity}] {card.MasterData.Name} Lv.{card.Level}");
+                Console.WriteLine($"   HP:{card.MasterData.HP} ATK:{card.MasterData.ATK} DEF:{card.MasterData.DEF} | 전투력: {card.GetPower()}");
+                Console.WriteLine($"   능력: {card.MasterData.GetAbilityDescription()}");
+            }
 
             Console.WriteLine();
             Console.Write("분해할 카드 번호 (취소: 0): ");
             
-            if (int.TryParse(Console.ReadLine(), out int index) && index > 0 && index <= game.PlayerCards.Count)
+            if (int.TryParse(Console.ReadLine(), out int index) && index > 0 && index <= cards.Count)
             {
-                var cards = game.GetCardsSortedByPower();
                 var card = cards[index - 1];
+                
+                if (deckIds.Contains(card.InstanceId))
+                {
+                    Console.WriteLine();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("========================================");
+                    Console.WriteLine("  ⚠️  덱에 편성된 카드는 분해할 수 없습니다!  ⚠️");
+                    Console.WriteLine("========================================");
+                    Console.ResetColor();
+                    return;
+                }
                 
                 Console.Write($"정말 분해하시겠습니까? (y/n): ");
                 if (Console.ReadLine()?.ToLower() == "y")
