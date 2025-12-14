@@ -22,7 +22,7 @@ namespace CardClickerRPG.Services
             _playFabService = playFabService;
             _lambdaService = lambdaService;
             _playerCards = new List<PlayerCard>();
-            
+
             // AUTO_CLICK 타이머 설정 (5초)
             _autoClickTimer = new System.Timers.Timer(5000);
             _autoClickTimer.Elapsed += OnAutoClickTimer;
@@ -33,7 +33,7 @@ namespace CardClickerRPG.Services
         public async Task<bool> InitializeAsync()
         {
             string userId = _playFabService.PlayFabId;
-            
+
             // Lambda로 플레이어 데이터 로드
             _currentPlayer = await _lambdaService.GetPlayerAsync(userId);
 
@@ -60,7 +60,7 @@ namespace CardClickerRPG.Services
             Console.WriteLine($"[로드 성공] 카드: {_playerCards.Count}장");
 
             StartAutoClick();
-            
+
             return true;
         }
 
@@ -89,27 +89,27 @@ namespace CardClickerRPG.Services
         private async void OnAutoClickTimer(object sender, ElapsedEventArgs e)
         {
             var abilities = GetActiveAbilities();
-            
+
             if (abilities.ContainsKey("AUTO_CLICK"))
             {
                 int autoClickCount = abilities["AUTO_CLICK"];
                 int clickMultiplier = GetClickMultiplier();
-                
+
                 int totalClicks = autoClickCount * clickMultiplier;
-                
+
                 _currentPlayer.ClickCount += totalClicks;
                 _currentPlayer.TotalClicks += totalClicks;
-                
+
                 WriteSystemMessage(ConsoleColor.Cyan, $"\n[AUTO_CLICK] 자동 클릭 ×{totalClicks}!");
-                
+
                 // 100 도달 체크
                 if (_currentPlayer.ClickCount >= AppConfig.ClicksForCard)
                 {
                     _currentPlayer.ClickCount -= AppConfig.ClicksForCard;
-                    
+
                     string randomCardId = await _dynamoDBService.GetRandomCardIdAsync();
                     var cardMaster = await _dynamoDBService.GetCardMasterAsync(randomCardId);
-                    
+
                     if (cardMaster != null)
                     {
                         // LUCKY 체크
@@ -117,25 +117,25 @@ namespace CardClickerRPG.Services
                         {
                             int luckyCount = abilities["LUCKY"];
                             int chance = luckyCount * 20;
-                            
+
                             var random = new Random();
                             if (random.Next(100) < chance)
                             {
                                 cardMaster.Rarity = UpgradeRarity(cardMaster.Rarity);
-                                WriteSystemMessage(ConsoleColor.Magenta, $"[LUCKY] 등급 상승! → {cardMaster.Rarity}");
+                                WriteSystemMessage(ConsoleColor.Magenta, $"[LUCKY] 등급 상승! → {cardMaster.Rarity}");       
                             }
                         }
-                        
+
                         var newCard = new PlayerCard
                         {
                             UserId = _currentPlayer.UserId,
                             CardId = randomCardId,
                             MasterData = cardMaster
                         };
-                        
+
                         await _dynamoDBService.AddPlayerCardAsync(newCard);
                         _playerCards.Add(newCard);
-                        
+
                         Console.WriteLine($"★ 카드 획득! [{cardMaster.Rarity}] {cardMaster.Name}");
                         
                         await RecalculateDeckPowerAsync();
@@ -157,7 +157,7 @@ namespace CardClickerRPG.Services
                     string ability = card.MasterData.Ability;
                     if (!abilities.ContainsKey(ability))
                         abilities[ability] = 0;
-                    
+
                     // 같은 능력은 최대 3장까지만 카운트
                     if (abilities[ability] < 3)
                     {
@@ -174,13 +174,13 @@ namespace CardClickerRPG.Services
         {
             var abilities = GetActiveAbilities();
             int multiplier = 1;
-            
+
             if (abilities.ContainsKey("CLICK_MULTIPLY"))
             {
                 int count = abilities["CLICK_MULTIPLY"]; // 최대 3
                 multiplier = (int)Math.Pow(2, count); // 2^count
             }
-            
+
             return multiplier;
         }
 
@@ -200,11 +200,11 @@ namespace CardClickerRPG.Services
             if (_currentPlayer.ClickCount >= AppConfig.ClicksForCard)
             {
                 _currentPlayer.ClickCount = 0;
-                
+
                 // 랜덤 카드 획득
                 string randomCardId = await _dynamoDBService.GetRandomCardIdAsync();
                 var cardMaster = await _dynamoDBService.GetCardMasterAsync(randomCardId);
-                
+
                 if (cardMaster == null)
                     return (false, null);
 
@@ -214,7 +214,7 @@ namespace CardClickerRPG.Services
                 {
                     int luckyCount = abilities["LUCKY"];
                     int chance = luckyCount * 20; // 1장당 20% 확률 (최대 60%)
-                    
+
                     var random = new Random();
                     if (random.Next(100) < chance)
                     {
@@ -222,20 +222,20 @@ namespace CardClickerRPG.Services
                         WriteSystemMessage(ConsoleColor.Magenta, $"[LUCKY] 등급 상승! → {cardMaster.Rarity}");
                     }
                 }
-                
+
                 var newCard = new PlayerCard
                 {
                     UserId = _currentPlayer.UserId,
                     CardId = randomCardId,
                     MasterData = cardMaster
                 };
-                
+
                 await _dynamoDBService.AddPlayerCardAsync(newCard);
                 _playerCards.Add(newCard);
-                
+
                 // 덱 전투력 재계산
                 await RecalculateDeckPowerAsync();
-                
+
                 return (true, newCard);
             }
 
@@ -318,7 +318,7 @@ namespace CardClickerRPG.Services
             // 강화 실행
             _currentPlayer.Dust -= cost;
             card.Level++;
-            
+
             await _dynamoDBService.UpgradeCardAsync(_currentPlayer.UserId, instanceId, card.Level);
 
             // 덱 전투력 재계산
