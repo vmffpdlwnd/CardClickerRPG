@@ -35,39 +35,13 @@
 
 *   **인증 및 랭킹**: [PlayFab](https://playfab.com/) 서비스를 사용하여 플레이어 계정 관리와 리더보드 기능을 구현합니다.
 *   **데이터베이스**: 플레이어 정보, 카드 데이터 등 핵심 데이터는 **AWS DynamoDB**에 저장됩니다.
-*   **서버 로직**: 클라이언트가 데이터베이스에 직접 접근하는 위험을 막기 위해, 모든 서버 로직은 **PlayFab CloudScript**를 통해 안전하게 실행됩니다. 게임 클라이언트는 CloudScript에 요청을 보내고, CloudScript가 AWS DynamoDB와 통신하여 결과를 반환하는 안전한 구조로 되어있습니다.
-
-## 🚀 설치 및 실행 방법
-
-1.  **선수 조건**:
-    *   [.NET SDK](https://dotnet.microsoft.com/download)가 설치되어 있어야 합니다.
-    *   [PlayFab 계정](https://developer.playfab.com/) 및 게임 타이틀이 생성되어 있어야 합니다.
-    *   AWS DynamoDB 테이블(`CardClicker_Players`, `CardClicker_PlayerCards`, `CardClicker_CardMaster`)이 설정되어 있어야 합니다.
-    *   PlayFab 타이틀의 **[Content] -> [Title Internal Data]**에 `AwsAccessKeyId`와 `AwsSecretAccessKey`가 저장되어 있어야 합니다.
-    *   `cloudscript.js` 파일이 PlayFab CloudScript에 업로드되고 배포되어 있어야 합니다.
-
-2.  **프로젝트 클론**:
-    ```bash
-    git clone [프로젝트_레포지토리_URL]
-    cd CardClickerRPG
-    ```
-
-3.  **의존성 설치 및 빌드**:
-    ```bash
-    dotnet restore
-    dotnet build
-    ```
-
-4.  **게임 실행**:
-    ```bash
-    dotnet run
-    ```
+*   **서버 로직**: 모든 서버 로직은 **AWS Lambda**를 통해 안전하게 실행됩니다. 게임 클라이언트는 Lambda 함수를 호출하여 필요한 데이터를 요청하고, Lambda가 DynamoDB와 통신하여 결과를 반환합니다.
 
 ## 🧑‍💻 개발 환경
 
 *   **언어**: C#
 *   **프레임워크**: .NET (Console Application)
-*   **백엔드 서비스**: PlayFab, AWS DynamoDB
+*   **백엔드 서비스**: PlayFab, AWS DynamoDB, AWS Lambda 
 *   **IDE**: Visual Studio 또는 VS Code (권장)
 
 ## 🤝 기여 방법
