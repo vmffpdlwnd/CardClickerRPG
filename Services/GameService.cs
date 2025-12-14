@@ -7,6 +7,7 @@ namespace CardClickerRPG.Services
     public class GameService
     {
         private readonly PlayFabService _playFabService;
+        private readonly LambdaService _lambdaService;
         private readonly DynamoDBService _dynamoDBService;
         
         private Player _currentPlayer;
@@ -16,10 +17,10 @@ namespace CardClickerRPG.Services
         public Player CurrentPlayer => _currentPlayer;
         public List<PlayerCard> PlayerCards => _playerCards;
 
-        public GameService(PlayFabService playFabService, DynamoDBService dynamoDBService)
+        public GameService(PlayFabService playFabService, LambdaService lambdaService)
         {
             _playFabService = playFabService;
-            _dynamoDBService = dynamoDBService;
+            _lambdaService = lambdaService;
             _playerCards = new List<PlayerCard>();
             
             // AUTO_CLICK 타이머 설정 (5초)
@@ -33,26 +34,31 @@ namespace CardClickerRPG.Services
         {
             string userId = _playFabService.PlayFabId;
             
-            // 플레이어 데이터 로드
-            _currentPlayer = await _dynamoDBService.GetPlayerAsync(userId);
-            
-            // 신규 플레이어면 생성
+            // Lambda로 플레이어 데이터 로드
+            _currentPlayer = await _lambdaService.GetPlayerAsync(userId);
+
             if (_currentPlayer == null)
             {
                 _currentPlayer = new Player { UserId = userId };
-                await _dynamoDBService.CreatePlayerAsync(_currentPlayer);
+                // createPlayer Lambda는 나중에 추가
                 Console.WriteLine("신규 플레이어 생성!");
             }
-            
-            // 카드 데이터 로드
-            _playerCards = await _dynamoDBService.GetPlayerCardsAsync(userId);
-            
+            else
+            {
+                Console.WriteLine($"[로드 성공] 클릭: {_currentPlayer.ClickCount}, 가루: {_currentPlayer.Dust}");
+            }
+
+            // Lambda로 카드 데이터 로드
+            _playerCards = await _lambdaService.GetPlayerCardsAsync(userId) ?? new List<PlayerCard>();
+
+            // 각 카드의 마스터 데이터 로드
             foreach (var card in _playerCards)
             {
-                card.MasterData = await _dynamoDBService.GetCardMasterAsync(card.CardId);
+                card.MasterData = await _lambdaService.GetCardMasterAsync(card.CardId);
             }
-            
-            // AUTO_CLICK 타이머 시작
+
+            Console.WriteLine($"[로드 성공] 카드: {_playerCards.Count}장");
+
             StartAutoClick();
             
             return true;
@@ -396,11 +402,11 @@ namespace CardClickerRPG.Services
         public async Task<bool> SaveAsync()
         {
             bool success = await _dynamoDBService.UpdatePlayerAsync(_currentPlayer);
-            if (success)
+            if (success)    
             {
                 Console.WriteLine("저장 완료!");
             }
-            return success;
+            return success;      
         }
 
         // 활성화된 능력 표시

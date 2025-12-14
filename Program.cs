@@ -12,8 +12,8 @@ namespace CardClickerRPG
 
             // 서비스 초기화
             var playFabService = new PlayFabService();
-            var dynamoDBService = new DynamoDBService();
-            var gameService = new GameService(playFabService, dynamoDBService);
+            var lambdaService = new LambdaService();
+            var gameService = new GameService(playFabService, lambdaService);
 
             // 로그인
             Console.Write("사용자 ID 입력 (아무거나): ");
@@ -89,7 +89,7 @@ namespace CardClickerRPG
 
         static void ShowMainMenu(GameService game)
         {
-            Console.Clear();
+            // Console.Clear(); // 디버깅 시 주석 처리
             Console.WriteLine("=== 카드 클릭커 RPG ===");
             Console.WriteLine($"현재 클릭: {game.CurrentPlayer.ClickCount}/{AppConfig.ClicksForCard}");
             Console.WriteLine($"보유 가루: {game.CurrentPlayer.Dust}");
