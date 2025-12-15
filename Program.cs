@@ -89,7 +89,7 @@ namespace CardClickerRPG
 
         static void ShowMainMenu(GameService game)
         {
-            // Console.Clear(); // 디버깅 시 주석 처리
+            Console.Clear(); // 디버깅 시 주석 처리
             Console.WriteLine("=== 카드 클릭커 RPG ===");
             Console.WriteLine($"현재 클릭: {game.CurrentPlayer.ClickCount}/{AppConfig.ClicksForCard}");
             Console.WriteLine($"보유 가루: {game.CurrentPlayer.Dust}");
