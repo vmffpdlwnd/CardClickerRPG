@@ -9,7 +9,7 @@ namespace CardClickerRPG.Services
     public class LambdaService
     {
         private readonly HttpClient _httpClient;
-        private const string API_BASE_URL = "https://3n9uyipt52.execute-api.ap-northeast-2.amazonaws.com/prod";
+        private const string API_BASE_URL = "https://h3ecwc0m9g.execute-api.ap-northeast-2.amazonaws.com/prod";
 
         public LambdaService()
         {
