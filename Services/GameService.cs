@@ -8,7 +8,6 @@ namespace CardClickerRPG.Services
     {
         private readonly PlayFabService _playFabService;
         private readonly LambdaService _lambdaService;
-        private readonly DynamoDBService _dynamoDBService;
         
         private Player _currentPlayer;
         private List<PlayerCard> _playerCards;
@@ -40,7 +39,8 @@ namespace CardClickerRPG.Services
             if (_currentPlayer == null)
             {
                 _currentPlayer = new Player { UserId = userId };
-                // createPlayer Lambda는 나중에 추가
+                // 신규 플레이어 생성
+                await _lambdaService.CreatePlayerAsync(_currentPlayer);
                 Console.WriteLine("신규 플레이어 생성!");
             }
             else
@@ -107,8 +107,8 @@ namespace CardClickerRPG.Services
                 {
                     _currentPlayer.ClickCount -= AppConfig.ClicksForCard;
 
-                    string randomCardId = await _dynamoDBService.GetRandomCardIdAsync();
-                    var cardMaster = await _dynamoDBService.GetCardMasterAsync(randomCardId);
+                    string randomCardId = await _lambdaService.GetRandomCardIdAsync();
+                    var cardMaster = await _lambdaService.GetCardMasterAsync(randomCardId);
 
                     if (cardMaster != null)
                     {
@@ -133,7 +133,7 @@ namespace CardClickerRPG.Services
                             MasterData = cardMaster
                         };
 
-                        await _dynamoDBService.AddPlayerCardAsync(newCard);
+                        await _lambdaService.AddPlayerCardAsync(newCard);
                         _playerCards.Add(newCard);
 
                         Console.WriteLine($"★ 카드 획득! [{cardMaster.Rarity}] {cardMaster.Name}");
@@ -202,8 +202,8 @@ namespace CardClickerRPG.Services
                 _currentPlayer.ClickCount = 0;
 
                 // 랜덤 카드 획득
-                string randomCardId = await _dynamoDBService.GetRandomCardIdAsync();
-                var cardMaster = await _dynamoDBService.GetCardMasterAsync(randomCardId);
+                string randomCardId = await _lambdaService.GetRandomCardIdAsync();
+                var cardMaster = await _lambdaService.GetCardMasterAsync(randomCardId);
 
                 if (cardMaster == null)
                     return (false, null);
@@ -230,7 +230,7 @@ namespace CardClickerRPG.Services
                     MasterData = cardMaster
                 };
 
-                await _dynamoDBService.AddPlayerCardAsync(newCard);
+                await _lambdaService.AddPlayerCardAsync(newCard);
                 _playerCards.Add(newCard);
 
                 // 덱 전투력 재계산
@@ -277,7 +277,7 @@ namespace CardClickerRPG.Services
             _currentPlayer.Dust += dustGain;
 
             // 카드 삭제
-            await _dynamoDBService.DeleteCardAsync(_currentPlayer.UserId, instanceId);
+            await _lambdaService.DeleteCardAsync(_currentPlayer.UserId, instanceId);
             _playerCards.Remove(card);
 
             // 덱 전투력 재계산
@@ -319,7 +319,7 @@ namespace CardClickerRPG.Services
             _currentPlayer.Dust -= cost;
             card.Level++;
 
-            await _dynamoDBService.UpgradeCardAsync(_currentPlayer.UserId, instanceId, card.Level);
+            await _lambdaService.UpgradeCardAsync(_currentPlayer.UserId, instanceId, card.Level);
 
             // 덱 전투력 재계산
             await RecalculateDeckPowerAsync();
@@ -358,7 +358,7 @@ namespace CardClickerRPG.Services
             foreach (var card in _playerCards.Where(c => c.IsNew))
             {
                 card.IsNew = false;
-                tasks.Add(_dynamoDBService.UpdateCardIsNewAsync(card.UserId, card.InstanceId, false));
+                tasks.Add(_lambdaService.UpdateCardIsNewAsync(card.UserId, card.InstanceId, false));
             }
 
             if (tasks.Count > 0)
@@ -401,7 +401,7 @@ namespace CardClickerRPG.Services
         // 저장
         public async Task<bool> SaveAsync()
         {
-            bool success = await _dynamoDBService.UpdatePlayerAsync(_currentPlayer);
+            bool success = await _lambdaService.UpdatePlayerAsync(_currentPlayer);
             if (success)    
             {
                 Console.WriteLine("저장 완료!");

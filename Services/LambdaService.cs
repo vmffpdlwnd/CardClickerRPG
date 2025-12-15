@@ -1,18 +1,15 @@
-using System;
-using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
-using System.Threading.Tasks;
-using CardClickerRPG.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using CardClickerRPG.Models;
 
 namespace CardClickerRPG.Services
 {
     public class LambdaService
     {
         private readonly HttpClient _httpClient;
-        private const string API_BASE_URL = "https://h3ecwc0m9g.execute-api.ap-northeast-2.amazonaws.com/prod";
+        private const string API_BASE_URL = "https://3n9uyipt52.execute-api.ap-northeast-2.amazonaws.com/prod";
 
         public LambdaService()
         {
@@ -32,49 +29,146 @@ namespace CardClickerRPG.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     Console.WriteLine($"[Lambda Error] {endpoint}: {responseBody}");
-                    return default;
+                    return default(T);
                 }
 
-                // API Gateway의 전체 응답을 JObject로 파싱
-                var gatewayResponse = JObject.Parse(responseBody);
-                // 실제 Lambda 응답은 'body' 프로퍼티에 문자열 형태로 존재
-                var lambdaBody = gatewayResponse["body"]?.ToString();
-
-                if (string.IsNullOrEmpty(lambdaBody))
-                {
-                    Console.WriteLine($"[Lambda Warning] {endpoint}: Response body is null or empty.");
-                    return default;
-                }
+                var result = JObject.Parse(responseBody);
+                var body = result["body"]?.ToString();
                 
-                // Lambda의 'body' 문자열을 실제 타겟 객체로 역직렬화
-                return JsonConvert.DeserializeObject<T>(lambdaBody);
+                if (string.IsNullOrEmpty(body))
+                    return default(T);
+
+                var data = JObject.Parse(body);
+                return data.ToObject<T>();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[Lambda Exception] {endpoint}: {ex.Message}");
-                return default;
+                return default(T);
             }
         }
 
         // 플레이어 조회
         public async Task<Player> GetPlayerAsync(string userId)
         {
-            var response = await CallLambdaAsync<GetPlayerResponse>("getPlayer", new { userId });
-            return response?.Player;
+            var result = await CallLambdaAsync<JObject>("getPlayer", new { userId });
+            
+            if (result?["player"] != null)
+            {
+                var playerData = result["player"];
+                return new Player
+                {
+                    UserId = playerData["userId"]?.ToString(),
+                    ClickCount = playerData["clickCount"]?.ToObject<int>() ?? 0,
+                    Dust = playerData["dust"]?.ToObject<int>() ?? 0,
+                    TotalClicks = playerData["totalClicks"]?.ToObject<int>() ?? 0,
+                    DeckPower = playerData["deckPower"]?.ToObject<int>() ?? 0,
+                    LastSaveTime = playerData["lastSaveTime"]?.ToString(),
+                    DeckCardIds = playerData["deckCardIds"]?.ToObject<List<string>>() ?? new List<string>()
+                };
+            }
+            
+            return null;
+        }
+
+        // 플레이어 생성
+        public async Task<bool> CreatePlayerAsync(Player player)
+        {
+            var result = await CallLambdaAsync<JObject>("createPlayer", new { player });
+            return result?["success"]?.ToObject<bool>() ?? false;
+        }
+
+        // 플레이어 업데이트
+        public async Task<bool> UpdatePlayerAsync(Player player)
+        {
+            var result = await CallLambdaAsync<JObject>("updatePlayer", new { player });
+            return result?["success"]?.ToObject<bool>() ?? false;
         }
 
         // 플레이어 카드 목록 조회
         public async Task<List<PlayerCard>> GetPlayerCardsAsync(string userId)
         {
-            var response = await CallLambdaAsync<GetPlayerCardsResponse>("getPlayerCards", new { userId });
-            return response?.Cards ?? new List<PlayerCard>();
+            var result = await CallLambdaAsync<JObject>("getPlayerCards", new { userId });
+            
+            if (result?["cards"] is JArray cardsArray)
+            {
+                var cards = new List<PlayerCard>();
+                
+                foreach (var cardToken in cardsArray)
+                {
+                    cards.Add(new PlayerCard
+                    {
+                        UserId = cardToken["userId"]?.ToString() ?? userId,
+                        InstanceId = cardToken["instanceId"]?.ToString() ?? Guid.NewGuid().ToString(),
+                        CardId = cardToken["cardId"]?.ToString(),
+                        Level = cardToken["level"]?.ToObject<int>() ?? 1,
+                        AcquiredAt = cardToken["acquiredAt"]?.ToString() ?? DateTime.UtcNow.ToString("o"),
+                        IsNew = cardToken["isNew"]?.ToObject<bool>() ?? true
+                    });
+                }
+                
+                return cards;
+            }
+            
+            return new List<PlayerCard>();
+        }
+
+        // 카드 추가
+        public async Task<bool> AddPlayerCardAsync(PlayerCard card)
+        {
+            var result = await CallLambdaAsync<JObject>("addPlayerCard", new { card });
+            return result?["success"]?.ToObject<bool>() ?? false;
+        }
+
+        // 카드 삭제
+        public async Task<bool> DeleteCardAsync(string userId, string instanceId)
+        {
+            var result = await CallLambdaAsync<JObject>("deleteCard", new { userId, instanceId });
+            return result?["success"]?.ToObject<bool>() ?? false;
+        }
+
+        // 카드 강화
+        public async Task<bool> UpgradeCardAsync(string userId, string instanceId, int newLevel)
+        {
+            var result = await CallLambdaAsync<JObject>("upgradeCard", new { userId, instanceId, newLevel });
+            return result?["success"]?.ToObject<bool>() ?? false;
+        }
+
+        // 카드 IsNew 업데이트
+        public async Task<bool> UpdateCardIsNewAsync(string userId, string instanceId, bool isNew)
+        {
+            var result = await CallLambdaAsync<JObject>("updateCardIsNew", new { userId, instanceId, isNew });
+            return result?["success"]?.ToObject<bool>() ?? false;
         }
 
         // 카드 마스터 조회
         public async Task<CardMaster> GetCardMasterAsync(string cardId)
         {
-            var response = await CallLambdaAsync<GetCardMasterResponse>("getCardMaster", new { cardId });
-            return response?.CardMaster;
+            var result = await CallLambdaAsync<JObject>("getCardMaster", new { cardId });
+            
+            if (result?["cardMaster"] != null)
+            {
+                var masterData = result["cardMaster"];
+                return new CardMaster
+                {
+                    CardId = masterData["cardId"]?.ToString(),
+                    Name = masterData["name"]?.ToString() ?? "Unknown",
+                    Rarity = masterData["rarity"]?.ToString() ?? "common",
+                    HP = masterData["hp"]?.ToObject<int>() ?? 100,
+                    ATK = masterData["atk"]?.ToObject<int>() ?? 10,
+                    DEF = masterData["def"]?.ToObject<int>() ?? 5,
+                    Ability = masterData["ability"]?.ToString() ?? "NONE"
+                };
+            }
+            
+            return null;
+        }
+
+        // 랜덤 카드 ID
+        public async Task<string> GetRandomCardIdAsync()
+        {
+            var result = await CallLambdaAsync<JObject>("getRandomCardId", new { });
+            return result?["cardId"]?.ToString();
         }
     }
 }
