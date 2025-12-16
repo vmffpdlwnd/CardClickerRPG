@@ -9,26 +9,37 @@ namespace CardClickerRPG.Services
     public class LambdaService
     {
         private readonly HttpClient _httpClient;
-        private const string API_BASE_URL = "https://h3ecwc0m9g.execute-api.ap-northeast-2.amazonaws.com/prod";
+        
+        // Lambda Function URLs
+        private const string GET_PLAYER_URL = "https://v6hs3vpwqzoddosa5b7qjkudey0ayxbs.lambda-url.ap-northeast-2.on.aws/";
+        private const string CREATE_PLAYER_URL = "https://soh7l2fkxzbjsmx2ziqltcawfe0kljjx.lambda-url.ap-northeast-2.on.aws/";
+        private const string UPDATE_PLAYER_URL = "https://gwrei56ilaooh7s77awvrorrsq0rvnzf.lambda-url.ap-northeast-2.on.aws/";
+        private const string GET_PLAYER_CARDS_URL = "https://lol3sm7xvil7di4mguevlk2sva0xukcd.lambda-url.ap-northeast-2.on.aws/";
+        private const string ADD_PLAYER_CARD_URL = "https://46vfasnjekvoqez3a773j32y2a0bjpfa.lambda-url.ap-northeast-2.on.aws/";
+        private const string DELETE_CARD_URL = "https://3kul7icolhv3gw2h7ppvrjjpia0gykij.lambda-url.ap-northeast-2.on.aws/";
+        private const string UPGRADE_CARD_URL = "https://osk2cazo75xoqbb24ozksjtwui0wzblm.lambda-url.ap-northeast-2.on.aws/";
+        private const string UPDATE_CARD_IS_NEW_URL = "https://ws3wtn4bleattq7libm3pzrkau0ftpsq.lambda-url.ap-northeast-2.on.aws/";
+        private const string GET_CARD_MASTER_URL = "https://gd3ehsqahzb7wkcz7htve7oiiy0wmlmx.lambda-url.ap-northeast-2.on.aws/";
+        private const string GET_RANDOM_CARD_ID_URL = "https://waitmpje5jdxhpqscacrgsh5m40ljycf.lambda-url.ap-northeast-2.on.aws/";
 
         public LambdaService()
         {
             _httpClient = new HttpClient();
         }
 
-        private async Task<T> CallLambdaAsync<T>(string endpoint, object payload)
+        private async Task<T> CallLambdaAsync<T>(string url, object payload)
         {
             try
             {
                 var json = JsonConvert.SerializeObject(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.PostAsync($"{API_BASE_URL}/{endpoint}", content);
+                var response = await _httpClient.PostAsync(url, content);
                 var responseBody = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[Lambda Error] {endpoint}: {responseBody}");
+                    Console.WriteLine($"[Lambda Error] {url}: {responseBody}");
                     return default(T);
                 }
 
@@ -43,7 +54,7 @@ namespace CardClickerRPG.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Lambda Exception] {endpoint}: {ex.Message}");
+                Console.WriteLine($"[Lambda Exception] {url}: {ex.Message}");
                 return default(T);
             }
         }
@@ -74,21 +85,21 @@ namespace CardClickerRPG.Services
         // 플레이어 생성
         public async Task<bool> CreatePlayerAsync(Player player)
         {
-            var result = await CallLambdaAsync<JObject>("createPlayer", new { player });
+            var result = await CallLambdaAsync<JObject>(CREATE_PLAYER_URL, new { player });
             return result?["success"]?.ToObject<bool>() ?? false;
         }
 
         // 플레이어 업데이트
         public async Task<bool> UpdatePlayerAsync(Player player)
         {
-            var result = await CallLambdaAsync<JObject>("updatePlayer", new { player });
+            var result = await CallLambdaAsync<JObject>(UPDATE_PLAYER_URL, new { player });
             return result?["success"]?.ToObject<bool>() ?? false;
         }
 
         // 플레이어 카드 목록 조회
         public async Task<List<PlayerCard>> GetPlayerCardsAsync(string userId)
         {
-            var result = await CallLambdaAsync<JObject>("getPlayerCards", new { userId });
+            var result = await CallLambdaAsync<JObject>(GET_PLAYER_CARDS_URL, new { userId });
             
             if (result?["cards"] is JArray cardsArray)
             {
@@ -116,35 +127,35 @@ namespace CardClickerRPG.Services
         // 카드 추가
         public async Task<bool> AddPlayerCardAsync(PlayerCard card)
         {
-            var result = await CallLambdaAsync<JObject>("addPlayerCard", new { card });
+            var result = await CallLambdaAsync<JObject>(ADD_PLAYER_CARD_URL, new { card });
             return result?["success"]?.ToObject<bool>() ?? false;
         }
 
         // 카드 삭제
         public async Task<bool> DeleteCardAsync(string userId, string instanceId)
         {
-            var result = await CallLambdaAsync<JObject>("deleteCard", new { userId, instanceId });
+            var result = await CallLambdaAsync<JObject>(DELETE_CARD_URL, new { userId, instanceId });
             return result?["success"]?.ToObject<bool>() ?? false;
         }
 
         // 카드 강화
         public async Task<bool> UpgradeCardAsync(string userId, string instanceId, int newLevel)
         {
-            var result = await CallLambdaAsync<JObject>("upgradeCard", new { userId, instanceId, newLevel });
+            var result = await CallLambdaAsync<JObject>(UPGRADE_CARD_URL, new { userId, instanceId, newLevel });
             return result?["success"]?.ToObject<bool>() ?? false;
         }
 
         // 카드 IsNew 업데이트
         public async Task<bool> UpdateCardIsNewAsync(string userId, string instanceId, bool isNew)
         {
-            var result = await CallLambdaAsync<JObject>("updateCardIsNew", new { userId, instanceId, isNew });
+            var result = await CallLambdaAsync<JObject>(UPDATE_CARD_IS_NEW_URL, new { userId, instanceId, isNew });
             return result?["success"]?.ToObject<bool>() ?? false;
         }
 
         // 카드 마스터 조회
         public async Task<CardMaster> GetCardMasterAsync(string cardId)
         {
-            var result = await CallLambdaAsync<JObject>("getCardMaster", new { cardId });
+            var result = await CallLambdaAsync<JObject>(GET_CARD_MASTER_URL, new { cardId });
             
             if (result?["cardMaster"] != null)
             {
@@ -167,7 +178,7 @@ namespace CardClickerRPG.Services
         // 랜덤 카드 ID
         public async Task<string> GetRandomCardIdAsync()
         {
-            var result = await CallLambdaAsync<JObject>("getRandomCardId", new { });
+            var result = await CallLambdaAsync<JObject>(GET_RANDOM_CARD_ID_URL, new { });
             return result?["cardId"]?.ToString();
         }
     }
