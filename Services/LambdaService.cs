@@ -32,6 +32,8 @@ namespace CardClickerRPG.Services
             try
             {
                 var json = JsonConvert.SerializeObject(payload);
+                Console.WriteLine($"[Lambda Request] {url}");
+                Console.WriteLine($"[Lambda Payload] {json}");
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync(url, content);
@@ -59,10 +61,43 @@ namespace CardClickerRPG.Services
             }
         }
 
+        private async Task<T> CallLambdaGetAsync<T>(string url)
+        {
+            try
+            {
+                Console.WriteLine($"[Lambda GET Request] {url}");
+
+                var response = await _httpClient.GetAsync(url);
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"[Lambda Error] {url}: {responseBody}");
+                    return default(T);
+                }
+
+                var result = JObject.Parse(responseBody);
+                var body = result["body"]?.ToString();
+                
+                if (string.IsNullOrEmpty(body))
+                    return default(T);
+
+                var data = JObject.Parse(body);
+                return data.ToObject<T>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Lambda Exception] {url}: {ex.Message}");
+                return default(T);
+            }
+        }
+
         // 플레이어 조회
         public async Task<Player> GetPlayerAsync(string userId)
         {
-            var result = await CallLambdaAsync<JObject>("getPlayer", new { userId });
+            // GET 방식으로 쿼리 파라미터 전달 시도
+            var url = $"{GET_PLAYER_URL}?userId={Uri.EscapeDataString(userId)}";
+            var result = await CallLambdaGetAsync<JObject>(url);
             
             if (result?["player"] != null)
             {
@@ -99,7 +134,9 @@ namespace CardClickerRPG.Services
         // 플레이어 카드 목록 조회
         public async Task<List<PlayerCard>> GetPlayerCardsAsync(string userId)
         {
-            var result = await CallLambdaAsync<JObject>(GET_PLAYER_CARDS_URL, new { userId });
+            // GET 방식으로 쿼리 파라미터 전달 시도
+            var url = $"{GET_PLAYER_CARDS_URL}?userId={Uri.EscapeDataString(userId)}";
+            var result = await CallLambdaGetAsync<JObject>(url);
             
             if (result?["cards"] is JArray cardsArray)
             {
