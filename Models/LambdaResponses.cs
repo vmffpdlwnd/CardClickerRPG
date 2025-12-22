@@ -3,6 +3,12 @@ using Newtonsoft.Json;
 
 namespace CardClickerRPG.Models
 {
+    public class SuccessResponse
+    {
+        [JsonProperty("success")]
+        public bool Success { get; set; }
+    }
+
     public class GetPlayerResponse
     {
         [JsonProperty("player")]
@@ -19,5 +25,11 @@ namespace CardClickerRPG.Models
     {
         [JsonProperty("cardMaster")]
         public CardMaster CardMaster { get; set; }
+    }
+
+    public class GetRandomCardIdResponse
+    {
+        [JsonProperty("cardId")]
+        public string CardId { get; set; }
     }
 }

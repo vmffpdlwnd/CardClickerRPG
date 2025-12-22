@@ -1,8 +1,10 @@
+using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Threading.Tasks;
 using CardClickerRPG.Models;
+using Newtonsoft.Json;
 
 namespace CardClickerRPG.Services
 {
@@ -27,13 +29,11 @@ namespace CardClickerRPG.Services
             _httpClient = new HttpClient();
         }
 
-        private async Task<T> CallLambdaAsync<T>(string url, object payload)
+        private async Task<T> CallLambdaAsync<T>(string url, object payload) where T : class
         {
             try
             {
                 var json = JsonConvert.SerializeObject(payload);
-                Console.WriteLine($"[Lambda Request] {url}");
-                Console.WriteLine($"[Lambda Payload] {json}");
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync(url, content);
@@ -41,182 +41,98 @@ namespace CardClickerRPG.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[Lambda Error] {url}: {responseBody}");
-                    return default(T);
+                    Console.WriteLine($"[Lambda Error] {response.StatusCode} on {url}: {responseBody}");
+                    return null;
                 }
 
-                var result = JObject.Parse(responseBody);
-                var body = result["body"]?.ToString();
-                
-                if (string.IsNullOrEmpty(body))
-                    return default(T);
-
-                var data = JObject.Parse(body);
-                return data.ToObject<T>();
+                // Directly deserialize to the target type T
+                return JsonConvert.DeserializeObject<T>(responseBody);
+            }
+            catch (JsonException ex)
+            {
+                Console.WriteLine($"[Lambda JsonException] on {url}: {ex.Message}");
+                return null;
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"[Lambda HttpRequestException] on {url}: {ex.Message}");
+                return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Lambda Exception] {url}: {ex.Message}");
-                return default(T);
-            }
-        }
-
-        private async Task<T> CallLambdaGetAsync<T>(string url)
-        {
-            try
-            {
-                Console.WriteLine($"[Lambda GET Request] {url}");
-
-                var response = await _httpClient.GetAsync(url);
-                var responseBody = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    Console.WriteLine($"[Lambda Error] {url}: {responseBody}");
-                    return default(T);
-                }
-
-                var result = JObject.Parse(responseBody);
-                var body = result["body"]?.ToString();
-                
-                if (string.IsNullOrEmpty(body))
-                    return default(T);
-
-                var data = JObject.Parse(body);
-                return data.ToObject<T>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Lambda Exception] {url}: {ex.Message}");
-                return default(T);
+                Console.WriteLine($"[Lambda Exception] on {url}: {ex.Message}");
+                return null;
             }
         }
 
         // 플레이어 조회
         public async Task<Player> GetPlayerAsync(string userId)
         {
-            // GET 방식으로 쿼리 파라미터 전달 시도
-            var url = $"{GET_PLAYER_URL}?userId={Uri.EscapeDataString(userId)}";
-            var result = await CallLambdaGetAsync<JObject>(url);
-            
-            if (result?["player"] != null)
-            {
-                var playerData = result["player"];
-                return new Player
-                {
-                    UserId = playerData["userId"]?.ToString(),
-                    ClickCount = playerData["clickCount"]?.ToObject<int>() ?? 0,
-                    Dust = playerData["dust"]?.ToObject<int>() ?? 0,
-                    TotalClicks = playerData["totalClicks"]?.ToObject<int>() ?? 0,
-                    DeckPower = playerData["deckPower"]?.ToObject<int>() ?? 0,
-                    LastSaveTime = playerData["lastSaveTime"]?.ToString(),
-                    DeckCardIds = playerData["deckCardIds"]?.ToObject<List<string>>() ?? new List<string>()
-                };
-            }
-            
-            return null;
+            var response = await CallLambdaAsync<GetPlayerResponse>(GET_PLAYER_URL, new { userId });
+            return response?.Player;
         }
 
         // 플레이어 생성
         public async Task<bool> CreatePlayerAsync(Player player)
         {
-            var result = await CallLambdaAsync<JObject>(CREATE_PLAYER_URL, new { player });
-            return result?["success"]?.ToObject<bool>() ?? false;
+            var response = await CallLambdaAsync<SuccessResponse>(CREATE_PLAYER_URL, new { player });
+            return response?.Success ?? false;
         }
 
         // 플레이어 업데이트
         public async Task<bool> UpdatePlayerAsync(Player player)
         {
-            var result = await CallLambdaAsync<JObject>(UPDATE_PLAYER_URL, new { player });
-            return result?["success"]?.ToObject<bool>() ?? false;
+            var response = await CallLambdaAsync<SuccessResponse>(UPDATE_PLAYER_URL, new { player });
+            return response?.Success ?? false;
         }
 
         // 플레이어 카드 목록 조회
         public async Task<List<PlayerCard>> GetPlayerCardsAsync(string userId)
         {
-            // GET 방식으로 쿼리 파라미터 전달 시도
-            var url = $"{GET_PLAYER_CARDS_URL}?userId={Uri.EscapeDataString(userId)}";
-            var result = await CallLambdaGetAsync<JObject>(url);
-            
-            if (result?["cards"] is JArray cardsArray)
-            {
-                var cards = new List<PlayerCard>();
-                
-                foreach (var cardToken in cardsArray)
-                {
-                    cards.Add(new PlayerCard
-                    {
-                        UserId = cardToken["userId"]?.ToString() ?? userId,
-                        InstanceId = cardToken["instanceId"]?.ToString() ?? Guid.NewGuid().ToString(),
-                        CardId = cardToken["cardId"]?.ToString(),
-                        Level = cardToken["level"]?.ToObject<int>() ?? 1,
-                        AcquiredAt = cardToken["acquiredAt"]?.ToString() ?? DateTime.UtcNow.ToString("o"),
-                        IsNew = cardToken["isNew"]?.ToObject<bool>() ?? true
-                    });
-                }
-                
-                return cards;
-            }
-            
-            return new List<PlayerCard>();
+            var response = await CallLambdaAsync<GetPlayerCardsResponse>(GET_PLAYER_CARDS_URL, new { userId });
+            return response?.Cards ?? new List<PlayerCard>();
         }
 
         // 카드 추가
         public async Task<bool> AddPlayerCardAsync(PlayerCard card)
         {
-            var result = await CallLambdaAsync<JObject>(ADD_PLAYER_CARD_URL, new { card });
-            return result?["success"]?.ToObject<bool>() ?? false;
+            var response = await CallLambdaAsync<SuccessResponse>(ADD_PLAYER_CARD_URL, new { card });
+            return response?.Success ?? false;
         }
 
         // 카드 삭제
         public async Task<bool> DeleteCardAsync(string userId, string instanceId)
         {
-            var result = await CallLambdaAsync<JObject>(DELETE_CARD_URL, new { userId, instanceId });
-            return result?["success"]?.ToObject<bool>() ?? false;
+            var response = await CallLambdaAsync<SuccessResponse>(DELETE_CARD_URL, new { userId, instanceId });
+            return response?.Success ?? false;
         }
 
         // 카드 강화
         public async Task<bool> UpgradeCardAsync(string userId, string instanceId, int newLevel)
         {
-            var result = await CallLambdaAsync<JObject>(UPGRADE_CARD_URL, new { userId, instanceId, newLevel });
-            return result?["success"]?.ToObject<bool>() ?? false;
+            var response = await CallLambdaAsync<SuccessResponse>(UPGRADE_CARD_URL, new { userId, instanceId, newLevel });
+            return response?.Success ?? false;
         }
 
         // 카드 IsNew 업데이트
         public async Task<bool> UpdateCardIsNewAsync(string userId, string instanceId, bool isNew)
         {
-            var result = await CallLambdaAsync<JObject>(UPDATE_CARD_IS_NEW_URL, new { userId, instanceId, isNew });
-            return result?["success"]?.ToObject<bool>() ?? false;
+            var response = await CallLambdaAsync<SuccessResponse>(UPDATE_CARD_IS_NEW_URL, new { userId, instanceId, isNew });
+            return response?.Success ?? false;
         }
 
         // 카드 마스터 조회
         public async Task<CardMaster> GetCardMasterAsync(string cardId)
         {
-            var result = await CallLambdaAsync<JObject>(GET_CARD_MASTER_URL, new { cardId });
-            
-            if (result?["cardMaster"] != null)
-            {
-                var masterData = result["cardMaster"];
-                return new CardMaster
-                {
-                    CardId = masterData["cardId"]?.ToString(),
-                    Name = masterData["name"]?.ToString() ?? "Unknown",
-                    Rarity = masterData["rarity"]?.ToString() ?? "common",
-                    HP = masterData["hp"]?.ToObject<int>() ?? 100,
-                    ATK = masterData["atk"]?.ToObject<int>() ?? 10,
-                    DEF = masterData["def"]?.ToObject<int>() ?? 5,
-                    Ability = masterData["ability"]?.ToString() ?? "NONE"
-                };
-            }
-            
-            return null;
+            var response = await CallLambdaAsync<GetCardMasterResponse>(GET_CARD_MASTER_URL, new { cardId });
+            return response?.CardMaster;
         }
 
         // 랜덤 카드 ID
         public async Task<string> GetRandomCardIdAsync()
         {
-            var result = await CallLambdaAsync<JObject>(GET_RANDOM_CARD_ID_URL, new { });
-            return result?["cardId"]?.ToString();
+            var response = await CallLambdaAsync<GetRandomCardIdResponse>(GET_RANDOM_CARD_ID_URL, new { });
+            return response?.CardId;
         }
     }
 }
