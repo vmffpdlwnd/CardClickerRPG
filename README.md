@@ -6,6 +6,17 @@
 
 당신은 계속해서 클릭하여 새로운 카드를 획득하고, 덱을 강화하여 더 높은 전투력을 달성해야 합니다. 다양한 능력을 가진 카드들을 전략적으로 조합하여 효율을 극대화하고, 다른 플레이어들과 전투력 랭킹으로 경쟁하세요!
 
+## 📥 다운로드 및 실행
+
+**[최신 버전 내려받기 (GitHub Releases)](https://github.com/vmffpdlwnd/CardClickerRPG/releases/latest)**
+
+1.  Releases에서 `CardClickerRPG-win-x64.zip`을 내려받아 압축을 풉니다.
+2.  `CardClickerRPG.exe`를 실행합니다. .NET을 따로 설치하지 않아도 됩니다. (Windows 64비트)
+3.  "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누릅니다. 서명하지 않은 프로그램이라 뜨는 경고입니다.
+4.  사용자 ID를 아무거나 입력하면 시작됩니다. 같은 ID를 입력하면 이어서 플레이합니다.
+
+> 인터넷 연결이 필요합니다. (PlayFab 로그인, AWS Lambda 서버 로직)
+
 ## ✨ 주요 기능
 
 ### 🖱️ **클릭 & 카드 획득**
